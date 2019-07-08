@@ -9,6 +9,8 @@ use hashbrown::HashMap;
 use rayon::prelude::*;
 use regex::RegexSet;
 use walkdir::{DirEntry, WalkDir};
+extern crate humansize;
+use humansize::{file_size_opts, FileSize};
 
 struct Options {
     file_include_regexes: RegexSet,
@@ -16,6 +18,7 @@ struct Options {
     dir_include_regexes: RegexSet,
     dir_exclude_regexes: RegexSet,
     verbosity: u64,
+    hash_bytes: usize,
 }
 
 impl Options {
@@ -66,6 +69,13 @@ fn parse_args() -> clap::ArgMatches<'static> {
                 .multiple(true)
                 .help("Sets the level of verbosity"),
         )
+        .arg(
+            Arg::with_name("hash-bytes")
+                .short("b")
+                .takes_value(true)
+                .help("Hash N first bytes only?")
+                .default_value("1000000000"),
+        )
         .get_matches();
 }
 
@@ -90,12 +100,13 @@ fn main() {
         file_exclude_regexes: RegexSet::new(&([] as [String; 0])).unwrap(),
         file_include_regexes: RegexSet::new(&([] as [String; 0])).unwrap(),
         verbosity: args.occurrences_of("v"),
+        hash_bytes: args.value_of("hash-bytes").unwrap().parse().unwrap(),
     };
 
-    let map = directories
+    let by_key_and_path = directories
         .par_iter()
         .map(|dir| {
-            let mut map: HashMap<String, Vec<DirEntry>> = HashMap::new();
+            let mut by_key_and_path: HashMap<String, HashMap<String, DirEntry>> = HashMap::new();
             println!("Traversing: {:#?}", dir);
             let walker = WalkDir::new(dir).into_iter();
             for er in walker.filter_entry(|dent| options.is_entry_included(&dent)) {
@@ -104,22 +115,40 @@ fn main() {
                     println!("{}", entry.path().display());
                 }
                 let key = group_key(&entry);
-                match map.get_mut(&key) {
-                    Some(vec) => vec.push(entry),
-                    None => {
-                        map.insert(key, vec![entry]);
-                    }
-                }
+                let by_path = by_key_and_path.entry(key).or_insert_with(|| HashMap::new());
+                by_path.insert(entry.path().to_str().unwrap().to_string(), entry);
             }
-            map
+            by_key_and_path
         })
+        // merge per-directory maps into one
         .reduce(
             || HashMap::new(),
-            |mut acc, map| {
-                acc.extend(map);
-                acc
+            |mut accmap, map| {
+                for (key, ents) in map {
+                    accmap
+                        .entry(key)
+                        .or_insert_with(|| HashMap::new())
+                        .extend(ents);
+                }
+                accmap
             },
         );
-    let n_files = map.values().fold(0u32, |acc, lst| acc + lst.len() as u32);
-    println!("{} groups, {} files.", map.len(), n_files);
+    let mut by_key: HashMap<String, Vec<DirEntry>> = HashMap::new();
+    for (key, ent_map) in by_key_and_path {
+        by_key.insert(key, ent_map.values().cloned().collect());
+    }
+    let n_files = by_key
+        .values()
+        .fold(0u32, |acc, lst| acc + lst.len() as u32);
+    let total_size = by_key.values().fold(0u64, |acc, lst| {
+        acc + lst
+            .iter()
+            .fold(0u64, |acc, dent| acc + dent.metadata().unwrap().len())
+    });
+    println!(
+        "{} groups, {} files, {}.",
+        by_key.len(),
+        n_files,
+        total_size.file_size(file_size_opts::CONVENTIONAL).unwrap()
+    );
 }
