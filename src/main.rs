@@ -3,14 +3,19 @@ extern crate clap;
 extern crate rayon;
 extern crate regex;
 extern crate walkdir;
+extern crate humansize;
 
 use clap::{App, Arg};
 use hashbrown::HashMap;
 use rayon::prelude::*;
 use regex::RegexSet;
 use walkdir::{DirEntry, WalkDir};
-extern crate humansize;
 use humansize::{file_size_opts, FileSize};
+use std::fs::{File};
+use std::io::{Read, Seek, SeekFrom};
+use std::error::Error;
+use sha2::{Sha256, Digest};
+
 
 struct Options {
     file_include_regexes: RegexSet,
@@ -18,7 +23,7 @@ struct Options {
     dir_include_regexes: RegexSet,
     dir_exclude_regexes: RegexSet,
     verbosity: u64,
-    hash_bytes: usize,
+    hash_bytes: u64,
 }
 
 impl Options {
@@ -91,18 +96,7 @@ fn group_key(dent: &DirEntry) -> String {
     format!("{},{}", extension, size)
 }
 
-fn main() {
-    let args = parse_args();
-    let directories = values_t!(args, "directory", String).unwrap();
-    let options = Options {
-        dir_exclude_regexes: RegexSet::new(&[r"node_modules|pycache|\.git|\.tox"]).unwrap(),
-        dir_include_regexes: RegexSet::new(&([] as [String; 0])).unwrap(),
-        file_exclude_regexes: RegexSet::new(&([] as [String; 0])).unwrap(),
-        file_include_regexes: RegexSet::new(&([] as [String; 0])).unwrap(),
-        verbosity: args.occurrences_of("v"),
-        hash_bytes: args.value_of("hash-bytes").unwrap().parse().unwrap(),
-    };
-
+fn find_files(directories: &Vec<String>, options: &Options) -> HashMap<String, Vec<DirEntry>> {
     let by_key_and_path = directories
         .par_iter()
         .map(|dir| {
@@ -137,18 +131,71 @@ fn main() {
     for (key, ent_map) in by_key_and_path {
         by_key.insert(key, ent_map.values().cloned().collect());
     }
-    let n_files = by_key
+    by_key
+}
+
+fn hash_key_group<'a>(dents: &'a Vec<DirEntry>, options: &Options) -> HashMap<String, Vec<&'a DirEntry>> {
+    let hashes: Vec<Result<(&DirEntry, String), Box<Error>>> = dents.iter().map(|dent| {
+        let f = File::open(dent.path())?;
+        let mut buf = vec![0; 524288];
+        let mut hasher = Sha256::new();
+        let mut flimit = f.take(options.hash_bytes);
+        loop {
+            let n_read = flimit.read(&mut buf)?;
+            if n_read == 0 {
+                break;
+            }
+            hasher.input(&buf[0..n_read]);
+        }
+        // todo: verify we only read up to options.hash_bytes bytes?
+        let hash = hex::encode(hasher.result());
+        Ok((dent, hash))
+    }).collect();
+    let mut hm: HashMap<String, Vec<&DirEntry>> = HashMap::new();
+    for res in hashes {
+        match res {
+            Ok((dent, hash)) => hm.entry(hash).or_insert_with(|| Vec::new()).push(dent),
+            _ => ()
+        }
+    }
+    hm
+}
+
+fn main() {
+    let args = parse_args();
+    let directories = values_t!(args, "directory", String).unwrap();
+    let options = Options {
+        dir_exclude_regexes: RegexSet::new(&[r"node_modules|pycache|\.git|\.tox"]).unwrap(),
+        dir_include_regexes: RegexSet::new(&([] as [String; 0])).unwrap(),
+        file_exclude_regexes: RegexSet::new(&([] as [String; 0])).unwrap(),
+        file_include_regexes: RegexSet::new(&([] as [String; 0])).unwrap(),
+        verbosity: args.occurrences_of("v"),
+        hash_bytes: args.value_of("hash-bytes").unwrap().parse().unwrap(),
+    };
+    let by_key: HashMap<String, Vec<DirEntry>> = find_files(&directories, &options);
+
+    let (n_files, total_size) = by_key
         .values()
-        .fold(0u32, |acc, lst| acc + lst.len() as u32);
-    let total_size = by_key.values().fold(0u64, |acc, lst| {
-        acc + lst
-            .iter()
-            .fold(0u64, |acc, dent| acc + dent.metadata().unwrap().len())
-    });
+        .fold((0u64, 0u64), |(n_files, total_size), dents| (
+            n_files + dents.len() as u64,
+            total_size + dents.iter().fold(0u64, |acc, dent| acc + dent.metadata().unwrap().len())
+        ));
     println!(
         "{} groups, {} files, {}.",
         by_key.len(),
         n_files,
         total_size.file_size(file_size_opts::CONVENTIONAL).unwrap()
     );
+    // TODO: sort key groups so largest gains get processed first
+
+    for (key, dents) in by_key {
+        for (hash, dents) in hash_key_group(&dents, &options) {
+            if dents.len() <= 1 {
+                continue;
+            }
+            for dent in dents {
+                println!("{} {}", hash, dent.path().to_str().unwrap());
+            }
+        }
+    }
 }

@@ -13,3 +13,5 @@ rayon = "1.1"
 walkdir = "2.2"
 hashbrown = { version = "0.5", features = ["rayon"]}
 humansize = "1.1"
+sha2 = "0.8.0"
+hex = "0.3.2"
