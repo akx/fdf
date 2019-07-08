@@ -1,23 +1,21 @@
 #[macro_use]
 extern crate clap;
-extern crate regex;
 extern crate rayon;
+extern crate regex;
 extern crate walkdir;
 
 use clap::{App, Arg};
-use regex::RegexSet;
-use std::fs::{self, DirEntry};
-use std::io;
-use std::path::Path;
+use hashbrown::HashMap;
 use rayon::prelude::*;
-use walkdir::WalkDir;
-
+use regex::RegexSet;
+use walkdir::{DirEntry, WalkDir};
 
 struct Options {
     file_include_regexes: RegexSet,
     file_exclude_regexes: RegexSet,
     dir_include_regexes: RegexSet,
     dir_exclude_regexes: RegexSet,
+    verbosity: u64,
 }
 
 impl Options {
@@ -39,6 +37,13 @@ impl Options {
             return false;
         }
         return true;
+    }
+
+    fn is_entry_included(&self, dent: &DirEntry) -> bool {
+        match dent.file_type().is_dir() {
+            true => self.is_dir_included(dent.path().to_str().unwrap()),
+            false => self.is_file_included(dent.path().to_str().unwrap()),
+        }
     }
 }
 
@@ -64,29 +69,17 @@ fn parse_args() -> clap::ArgMatches<'static> {
         .get_matches();
 }
 
-fn visit_dirs(options: &Options, dir: &Path) -> io::Result<Vec<fs::DirEntry>> {
-    let mut dirs: Vec<fs::DirEntry> = vec![];
-    let mut files: Vec<fs::DirEntry> = vec![];
-    if dir.is_dir() {
-        for entry in fs::read_dir(dir)? {
-            let entry = entry?;
-            let path = entry.path();
-            let path_str = path.to_str().unwrap();
-            if path.is_dir() && options.is_dir_included(path_str) {
-                dirs.push(entry);
-            } else {
-                if options.is_file_included(path_str) {
-                    files.push(entry);
-                    println!("{:?}", path);
-                }
-            }
-        }
-    }
-    files.par_extend(dirs.into_par_iter().flat_map(|de| visit_dirs(&options, &de.path()).unwrap()));
-    
-    Ok(files)
+fn group_key(dent: &DirEntry) -> String {
+    let size = match dent.metadata() {
+        Ok(s) => s.len(),
+        Err(_) => 0,
+    };
+    let extension: &str = match dent.path().extension() {
+        Some(ps) => ps.to_str().unwrap_or_default(),
+        None => "",
+    };
+    format!("{},{}", extension, size)
 }
-
 
 fn main() {
     let args = parse_args();
@@ -96,10 +89,37 @@ fn main() {
         dir_include_regexes: RegexSet::new(&([] as [String; 0])).unwrap(),
         file_exclude_regexes: RegexSet::new(&([] as [String; 0])).unwrap(),
         file_include_regexes: RegexSet::new(&([] as [String; 0])).unwrap(),
+        verbosity: args.occurrences_of("v"),
     };
 
-    directories.par_iter().for_each(|dir| {
-        println!("Traversing: {:#?}", dir);
-        visit_dirs(&options, Path::new(dir)).expect("ok");
-    });
+    let map = directories
+        .par_iter()
+        .map(|dir| {
+            let mut map: HashMap<String, Vec<DirEntry>> = HashMap::new();
+            println!("Traversing: {:#?}", dir);
+            let walker = WalkDir::new(dir).into_iter();
+            for er in walker.filter_entry(|dent| options.is_entry_included(&dent)) {
+                let entry = er.unwrap();
+                if options.verbosity >= 3 {
+                    println!("{}", entry.path().display());
+                }
+                let key = group_key(&entry);
+                match map.get_mut(&key) {
+                    Some(vec) => vec.push(entry),
+                    None => {
+                        map.insert(key, vec![entry]);
+                    }
+                }
+            }
+            map
+        })
+        .reduce(
+            || HashMap::new(),
+            |mut acc, map| {
+                acc.extend(map);
+                acc
+            },
+        );
+    let n_files = map.values().fold(0u32, |acc, lst| acc + lst.len() as u32);
+    println!("{} groups, {} files.", map.len(), n_files);
 }
