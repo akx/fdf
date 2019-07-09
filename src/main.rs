@@ -7,12 +7,12 @@ extern crate string_cache;
 extern crate walkdir;
 
 use clap::{App, Arg};
+use hashbrown::HashMap;
 use humansize::{file_size_opts, FileSize};
-use indicatif::ProgressBar;
+use rayon::prelude::*;
 use regex::RegexSet;
-
+use walkdir::DirEntry;
 mod fdf;
-
 use fdf::find::GroupKey;
 use fdf::options::Options;
 
@@ -43,6 +43,29 @@ fn parse_args() -> clap::ArgMatches<'static> {
                 .default_value("1000000000"),
         )
         .get_matches();
+}
+
+fn process_key_group(key: &GroupKey, dents: &Vec<DirEntry>, options: &Options) {
+    let size = key.size.file_size(file_size_opts::CONVENTIONAL).unwrap();
+    let mut header_printed: bool = false;
+    for (hash, dents) in fdf::hash::hash_key_group(&dents, &options) {
+        if dents.len() <= 1 {
+            continue;
+        }
+        if !header_printed {
+            println!(
+                "### {} {:?}s ({} files)",
+                size,
+                &*key.extension,
+                dents.len()
+            );
+            header_printed = true;
+        }
+        for dent in dents {
+            println!("{} {}", hash, dent.path().to_str().unwrap());
+        }
+        println!("");
+    }
 }
 
 fn main() {
@@ -76,30 +99,9 @@ fn main() {
         n_files,
         total_size.file_size(file_size_opts::CONVENTIONAL).unwrap()
     );
-    let mut sorted_keys = by_key.keys().collect::<Vec<&GroupKey>>();
-    sorted_keys.sort_unstable_by(|a, b| b.size.cmp(&a.size));
-
-    for key in sorted_keys {
-        let dents = by_key.get(key).unwrap();
-        let size = key.size.file_size(file_size_opts::CONVENTIONAL).unwrap();
-        let mut header_printed: bool = false;
-        for (hash, dents) in fdf::hash::hash_key_group(&dents, &options) {
-            if dents.len() <= 1 {
-                continue;
-            }
-            if !header_printed {
-                println!(
-                    "### {} {:?}s ({} files)",
-                    size,
-                    &*key.extension,
-                    dents.len()
-                );
-                header_printed = true;
-            }
-            for dent in dents {
-                println!("{} {}", hash, dent.path().to_str().unwrap());
-            }
-            println!("");
-        }
-    }
+    let mut sorted_pairs = by_key.iter().collect::<Vec<(&GroupKey, &Vec<DirEntry>)>>();
+    sorted_pairs.sort_unstable_by(|(ka, _), (kb, _)| kb.size.cmp(&ka.size));
+    sorted_pairs
+        .iter()
+        .for_each(|(key, dents)| process_key_group(key, dents, &options));
 }

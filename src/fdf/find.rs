@@ -2,8 +2,8 @@ use super::options::Options;
 use hashbrown::HashMap;
 use humansize::{file_size_opts, FileSize};
 use indicatif::ProgressBar;
-use walkdir::{DirEntry, WalkDir};
 use string_cache::DefaultAtom as Atom;
+use walkdir::{DirEntry, WalkDir};
 
 #[derive(Eq, PartialEq, Hash, Debug)]
 pub struct GroupKey {
