@@ -3,12 +3,13 @@ extern crate clap;
 extern crate humansize;
 extern crate rayon;
 extern crate regex;
+extern crate string_cache;
 extern crate walkdir;
 
 use clap::{App, Arg};
 use humansize::{file_size_opts, FileSize};
+use indicatif::ProgressBar;
 use regex::RegexSet;
-use std::cmp::Ordering;
 
 mod fdf;
 
@@ -80,17 +81,25 @@ fn main() {
 
     for key in sorted_keys {
         let dents = by_key.get(key).unwrap();
-        if dents.len() == 1 {
-            continue;
-        }
-        println!("### {:?} ({} files)", key, dents.len());
+        let size = key.size.file_size(file_size_opts::CONVENTIONAL).unwrap();
+        let mut header_printed: bool = false;
         for (hash, dents) in fdf::hash::hash_key_group(&dents, &options) {
             if dents.len() <= 1 {
                 continue;
             }
+            if !header_printed {
+                println!(
+                    "### {} {:?}s ({} files)",
+                    size,
+                    &*key.extension,
+                    dents.len()
+                );
+                header_printed = true;
+            }
             for dent in dents {
                 println!("{} {}", hash, dent.path().to_str().unwrap());
             }
+            println!("");
         }
     }
 }

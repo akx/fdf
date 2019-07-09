@@ -3,11 +3,12 @@ use hashbrown::HashMap;
 use humansize::{file_size_opts, FileSize};
 use indicatif::ProgressBar;
 use walkdir::{DirEntry, WalkDir};
+use string_cache::DefaultAtom as Atom;
 
 #[derive(Eq, PartialEq, Hash, Debug)]
 pub struct GroupKey {
     pub size: u64,
-    pub extension: String,
+    pub extension: Atom,
 }
 
 fn group_key(dent: &DirEntry) -> GroupKey {
@@ -15,10 +16,10 @@ fn group_key(dent: &DirEntry) -> GroupKey {
         Ok(s) => s.len(),
         Err(_) => 0,
     };
-    let extension = match dent.path().extension() {
-        Some(ps) => String::from(ps.to_str().unwrap()),
-        None => String::from(""),
-    };
+    let extension = Atom::from(match dent.path().extension() {
+        Some(ps) => ps.to_str().unwrap(),
+        None => dent.path().file_name().unwrap().to_str().unwrap(),
+    });
     return GroupKey {
         size: size,
         extension: extension,
@@ -85,7 +86,9 @@ pub fn find_files(directories: &Vec<String>, options: &Options) -> KeyToDentsMap
             });
     let mut by_key: KeyToDentsMap = HashMap::new();
     for (key, ent_map) in by_key_and_path {
-        by_key.insert(key, ent_map.values().cloned().collect());
+        if ent_map.len() > 1 {
+            by_key.insert(key, ent_map.values().cloned().collect());
+        }
     }
     prog.finish();
     by_key
