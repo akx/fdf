@@ -6,14 +6,14 @@ extern crate regex;
 extern crate walkdir;
 
 use clap::{App, Arg};
-use hashbrown::HashMap;
 use humansize::{file_size_opts, FileSize};
 use regex::RegexSet;
-use walkdir::{DirEntry};
+use std::cmp::Ordering;
 
 mod fdf;
 
 use fdf::options::{Options};
+use fdf::find::GroupKey;
 
 fn parse_args() -> clap::ArgMatches<'static> {
     return App::new("fdf")
@@ -55,7 +55,7 @@ fn main() {
         verbosity: args.occurrences_of("v"),
         hash_bytes: args.value_of("hash-bytes").unwrap().parse().unwrap(),
     };
-    let by_key: HashMap<String, Vec<DirEntry>> = fdf::find::find_files(&directories, &options);
+    let by_key = fdf::find::find_files(&directories, &options);
 
     let (n_files, total_size) =
         by_key
@@ -75,10 +75,15 @@ fn main() {
         n_files,
         total_size.file_size(file_size_opts::CONVENTIONAL).unwrap()
     );
-    // TODO: sort key groups so largest gains get processed first
+    let mut sorted_keys = by_key.keys().collect::<Vec<&GroupKey>>();
+    sorted_keys.sort_unstable_by(|a, b| b.size.cmp(&a.size));
 
-    for (key, dents) in by_key {
-        println!("### {}", key);
+    for key in sorted_keys {
+        let dents = by_key.get(key).unwrap();
+        if dents.len() == 1 {
+            continue;
+        }
+        println!("### {:?} ({} files)", key, dents.len());
         for (hash, dents) in fdf::hash::hash_key_group(&dents, &options) {
             if dents.len() <= 1 {
                 continue;

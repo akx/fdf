@@ -24,6 +24,9 @@ fn hash_file<'a>(
     }
     // todo: verify we only read up to options.hash_bytes bytes?
     let hash = hex::encode(hasher.result());
+    if options.verbosity >= 2 {
+        println!("{} {}", dent.path().display(), hash);
+    }
     Ok((dent, hash))
 }
 
@@ -31,10 +34,6 @@ pub fn hash_key_group<'a>(
     dents: &'a Vec<DirEntry>,
     options: &Options,
 ) -> HashMap<String, Vec<&'a DirEntry>> {
-    /*
-    let hashes: Vec<Result<(&DirEntry, String), Box<Error>>> =
-        dents.iter().map(|dent| hash_file(dent, options)).collect();
-    */
     let hashes: Vec<Result<(&DirEntry, String), ()>> =
         dents.par_iter().map(|dent| match hash_file(dent, options) {
             Ok(v) => Ok(v),

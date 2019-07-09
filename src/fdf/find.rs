@@ -4,23 +4,29 @@ use walkdir::{DirEntry, WalkDir};
 use indicatif::ProgressBar;
 use super::options::{Options};
 
-fn group_key(dent: &DirEntry) -> String {
+#[derive(Eq, PartialEq, Hash, Debug)]
+pub struct GroupKey {
+    pub size: u64,
+    pub extension: String,
+}
+
+fn group_key(dent: &DirEntry) -> GroupKey {
     let size = match dent.metadata() {
         Ok(s) => s.len(),
         Err(_) => 0,
     };
-    let extension: &str = match dent.path().extension() {
-        Some(ps) => ps.to_str().unwrap_or_default(),
-        None => "",
+    let extension = match dent.path().extension() {
+        Some(ps) => String::from(ps.to_str().unwrap()),
+        None => String::from(""),
     };
-    format!("{},{}", extension, size)
+    return GroupKey {size: size, extension: extension};
 }
 
 type StringToDentMap = HashMap<String, DirEntry>;
-type StringToStringToDentMap = HashMap<String, StringToDentMap>;
-type StringToDentsMap = HashMap<String, Vec<DirEntry>>;
+type KeyToStringToDentMap = HashMap<GroupKey, StringToDentMap>;
+pub type KeyToDentsMap = HashMap<GroupKey, Vec<DirEntry>>;
 
-pub fn find_files(directories: &Vec<String>, options: &Options) -> StringToDentsMap {
+pub fn find_files(directories: &Vec<String>, options: &Options) -> KeyToDentsMap {
     let prog = ProgressBar::new_spinner();
     let mut n_dirs: u64 = 0;
     let mut n_files: u64 = 0;
@@ -29,7 +35,7 @@ pub fn find_files(directories: &Vec<String>, options: &Options) -> StringToDents
     let by_key_and_paths = directories
         .iter()
         .map(|dir| {
-            let mut by_key_and_path: StringToStringToDentMap = HashMap::new();
+            let mut by_key_and_path: KeyToStringToDentMap = HashMap::new();
             let walker = WalkDir::new(dir).into_iter();
             for er in walker.filter_entry(|entry| options.is_entry_included(&entry)) {
                 let entry = er.unwrap();
@@ -49,11 +55,11 @@ pub fn find_files(directories: &Vec<String>, options: &Options) -> StringToDents
                 prog.inc(1);
             }
             by_key_and_path
-        }).collect::<Vec<StringToStringToDentMap>>();
+        }).collect::<Vec<KeyToStringToDentMap>>();
     prog.set_draw_delta(0);
     prog.set_message("Merging and regrouping...");
     // merge per-directory maps into one
-    let by_key_and_path: StringToStringToDentMap = by_key_and_paths.into_iter().fold(
+    let by_key_and_path: KeyToStringToDentMap = by_key_and_paths.into_iter().fold(
             HashMap::new(),
             |mut accmap, map| {
                 for (key, ents) in map {
@@ -65,7 +71,7 @@ pub fn find_files(directories: &Vec<String>, options: &Options) -> StringToDents
                 accmap
             },
         );
-    let mut by_key: StringToDentsMap = HashMap::new();
+    let mut by_key: KeyToDentsMap = HashMap::new();
     for (key, ent_map) in by_key_and_path {
         by_key.insert(key, ent_map.values().cloned().collect());
     }
