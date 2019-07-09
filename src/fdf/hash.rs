@@ -1,11 +1,11 @@
-use rayon::prelude::*;
+use super::options::Options;
 use hashbrown::HashMap;
+use rayon::prelude::*;
 use sha2::{Digest, Sha256};
 use std::error::Error;
-use std::fs::{File};
-use std::io::{Read};
-use walkdir::{DirEntry};
-use super::options::{Options};
+use std::fs::File;
+use std::io::Read;
+use walkdir::DirEntry;
 
 fn hash_file<'a>(
     dent: &'a DirEntry,
@@ -34,14 +34,16 @@ pub fn hash_key_group<'a>(
     dents: &'a Vec<DirEntry>,
     options: &Options,
 ) -> HashMap<String, Vec<&'a DirEntry>> {
-    let hashes: Vec<Result<(&DirEntry, String), ()>> =
-        dents.par_iter().map(|dent| match hash_file(dent, options) {
+    let hashes: Vec<Result<(&DirEntry, String), ()>> = dents
+        .par_iter()
+        .map(|dent| match hash_file(dent, options) {
             Ok(v) => Ok(v),
             Err(x) => {
                 println!("Unable to hash {:?}: {}", dent, x);
                 Err(())
-            },
-        }).collect();
+            }
+        })
+        .collect();
     let mut hm: HashMap<String, Vec<&DirEntry>> = HashMap::new();
     for res in hashes {
         match res {

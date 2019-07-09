@@ -1,8 +1,8 @@
+use super::options::Options;
 use hashbrown::HashMap;
 use humansize::{file_size_opts, FileSize};
-use walkdir::{DirEntry, WalkDir};
 use indicatif::ProgressBar;
-use super::options::{Options};
+use walkdir::{DirEntry, WalkDir};
 
 #[derive(Eq, PartialEq, Hash, Debug)]
 pub struct GroupKey {
@@ -19,7 +19,10 @@ fn group_key(dent: &DirEntry) -> GroupKey {
         Some(ps) => String::from(ps.to_str().unwrap()),
         None => String::from(""),
     };
-    return GroupKey {size: size, extension: extension};
+    return GroupKey {
+        size: size,
+        extension: extension,
+    };
 }
 
 type StringToDentMap = HashMap<String, DirEntry>;
@@ -51,17 +54,27 @@ pub fn find_files(directories: &Vec<String>, options: &Options) -> KeyToDentsMap
                 let key = group_key(&entry);
                 let by_path = by_key_and_path.entry(key).or_insert_with(|| HashMap::new());
                 by_path.insert(entry.path().to_str().unwrap().to_string(), entry);
-                prog.set_message(format!("{} dirs, {} files, {}...", n_dirs, n_files, n_bytes.file_size(file_size_opts::CONVENTIONAL).unwrap()).as_str());
+                prog.set_message(
+                    format!(
+                        "{} dirs, {} files, {}...",
+                        n_dirs,
+                        n_files,
+                        n_bytes.file_size(file_size_opts::CONVENTIONAL).unwrap()
+                    )
+                    .as_str(),
+                );
                 prog.inc(1);
             }
             by_key_and_path
-        }).collect::<Vec<KeyToStringToDentMap>>();
+        })
+        .collect::<Vec<KeyToStringToDentMap>>();
     prog.set_draw_delta(0);
     prog.set_message("Merging and regrouping...");
     // merge per-directory maps into one
-    let by_key_and_path: KeyToStringToDentMap = by_key_and_paths.into_iter().fold(
-            HashMap::new(),
-            |mut accmap, map| {
+    let by_key_and_path: KeyToStringToDentMap =
+        by_key_and_paths
+            .into_iter()
+            .fold(HashMap::new(), |mut accmap, map| {
                 for (key, ents) in map {
                     accmap
                         .entry(key)
@@ -69,8 +82,7 @@ pub fn find_files(directories: &Vec<String>, options: &Options) -> KeyToDentsMap
                         .extend(ents);
                 }
                 accmap
-            },
-        );
+            });
     let mut by_key: KeyToDentsMap = HashMap::new();
     for (key, ent_map) in by_key_and_path {
         by_key.insert(key, ent_map.values().cloned().collect());

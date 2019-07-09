@@ -12,8 +12,8 @@ use std::cmp::Ordering;
 
 mod fdf;
 
-use fdf::options::{Options};
 use fdf::find::GroupKey;
+use fdf::options::Options;
 
 fn parse_args() -> clap::ArgMatches<'static> {
     return App::new("fdf")
