@@ -19,34 +19,37 @@ use std::result::Result;
 use walkdir::DirEntry;
 
 fn process_key_group(key: &GroupKey, dents: &Vec<DirEntry>, options: &Options) -> KeyGroupResult {
-    let size = key.size.file_size(file_size_opts::CONVENTIONAL).unwrap();
-    let identifier = key.extension.to_string();
-    let mut header_printed: bool = false;
-    let mut kgr = KeyGroupResult {
+    KeyGroupResult {
         size: key.size,
-        identifier: identifier.to_string(),
-        hash_groups: Vec::new(),
-    };
-    for (hash, dents) in fdf::hash::hash_key_group(&dents, &options) {
-        if dents.len() <= 1 {
-            continue;
-        }
-
-        if !header_printed {
-            println!("### {}/{} ({} files)", size, identifier, dents.len());
-            header_printed = true;
-        }
-        let mut files: Vec<String> = Vec::new();
-        for dent in dents {
-            let filename = dent.path().to_str().unwrap();
-            println!("{} {}", hash, &filename);
-            files.push(filename.to_string());
-        }
-        println!("");
-        let hgr = HashGroupResult { hash, files };
-        kgr.hash_groups.push(hgr);
+        identifier: key.extension.to_string(),
+        hash_groups: fdf::hash::hash_key_group(&dents, &options)
+            .iter()
+            .map(|(hash, dents)| HashGroupResult {
+                hash: hash.to_string(),
+                files: dents
+                    .iter()
+                    .map(|dent| dent.path().to_str().unwrap().to_string())
+                    .collect(),
+            })
+            .collect(),
+        n_files: dents.len() as u64,
     }
-    kgr
+}
+
+fn print_key_group_result(kgr: &KeyGroupResult) {
+    if !kgr.hash_groups.iter().any(|hg| hg.files.len() > 1) {
+        return;
+    }
+    let size = kgr.size.file_size(file_size_opts::CONVENTIONAL).unwrap();
+    println!("### {}/{} ({} files)", size, kgr.identifier, kgr.n_files);
+    for hg in &kgr.hash_groups {
+        if hg.files.len() > 1 {
+            for path in &hg.files {
+                println!("{} {}", hg.hash, path);
+            }
+            println!("");
+        }
+    }
 }
 
 fn main() {
@@ -75,11 +78,16 @@ fn main() {
     sorted_pairs.sort_unstable_by(|(ka, _), (kb, _)| kb.size.cmp(&ka.size));
     let key_group_results = sorted_pairs
         .iter()
-        .map(|(key, dents)| process_key_group(key, dents, &options));
+        .map(|(key, dents)| {
+            let kgr = process_key_group(key, dents, &options);
+            print_key_group_result(&kgr);
+            kgr
+        })
+        .collect();
     let gr = GrandResult {
         find_stats,
         hash_stats,
-        key_groups: key_group_results.collect(),
+        key_groups: key_group_results,
     };
     println!("{}", serde_json::to_string(&gr).unwrap());
 }

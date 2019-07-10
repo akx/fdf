@@ -26,6 +26,7 @@ pub struct KeyGroupResult {
     pub size: u64,
     pub identifier: String,
     pub hash_groups: Vec<HashGroupResult>,
+    pub n_files: u64,
 }
 
 #[derive(Debug, Serialize)]
