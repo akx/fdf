@@ -5,6 +5,14 @@ use indicatif::ProgressBar;
 use string_cache::DefaultAtom as Atom;
 use walkdir::{DirEntry, WalkDir};
 
+#[derive(Debug)]
+pub struct FindStats {
+    pub n_bytes: u64,
+    pub n_dirs: u64,
+    pub n_files: u64,
+    pub n_precull_groups: u64,
+}
+
 #[derive(Eq, PartialEq, Hash, Debug)]
 pub struct GroupKey {
     pub size: u64,
@@ -30,7 +38,7 @@ type StringToDentMap = HashMap<String, DirEntry>;
 type KeyToStringToDentMap = HashMap<GroupKey, StringToDentMap>;
 pub type KeyToDentsMap = HashMap<GroupKey, Vec<DirEntry>>;
 
-pub fn find_files(directories: &Vec<String>, options: &Options) -> KeyToDentsMap {
+pub fn find_files(directories: &Vec<String>, options: &Options) -> (FindStats, KeyToDentsMap) {
     let prog = ProgressBar::new_spinner();
     let mut n_dirs: u64 = 0;
     let mut n_files: u64 = 0;
@@ -85,11 +93,17 @@ pub fn find_files(directories: &Vec<String>, options: &Options) -> KeyToDentsMap
                 accmap
             });
     let mut by_key: KeyToDentsMap = HashMap::new();
+    let stats = FindStats {
+        n_bytes: n_bytes,
+        n_dirs: n_dirs,
+        n_files: n_files,
+        n_precull_groups: by_key_and_path.len() as u64,
+    };
     for (key, ent_map) in by_key_and_path {
         if ent_map.len() > 1 {
             by_key.insert(key, ent_map.values().cloned().collect());
         }
     }
     prog.finish();
-    by_key
+    return (stats, by_key);
 }

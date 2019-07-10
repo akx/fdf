@@ -79,8 +79,17 @@ fn main() {
         verbosity: args.occurrences_of("v"),
         hash_bytes: args.value_of("hash-bytes").unwrap().parse().unwrap(),
     };
-    let by_key = fdf::find::find_files(&directories, &options);
-
+    let (stats, by_key) = fdf::find::find_files(&directories, &options);
+    println!(
+        "Found {} files in {} directories ({} groups before culling), {}.",
+        stats.n_files,
+        stats.n_dirs,
+        stats.n_precull_groups,
+        stats
+            .n_bytes
+            .file_size(file_size_opts::CONVENTIONAL)
+            .unwrap()
+    );
     let (n_files, total_size) =
         by_key
             .values()
@@ -94,7 +103,7 @@ fn main() {
                 )
             });
     println!(
-        "{} groups, {} files, {}.",
+        "Hashing {} groups, {} files, {}.",
         by_key.len(),
         n_files,
         total_size.file_size(file_size_opts::CONVENTIONAL).unwrap()
