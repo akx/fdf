@@ -2,6 +2,7 @@ use regex::RegexSet;
 use walkdir::DirEntry;
 
 pub struct Options {
+    pub directories: Vec<String>,
     pub file_include_regexes: RegexSet,
     pub file_exclude_regexes: RegexSet,
     pub dir_include_regexes: RegexSet,

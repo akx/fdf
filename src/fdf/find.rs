@@ -1,17 +1,10 @@
 use super::options::Options;
+use super::output::{FindStats, HashStats};
 use hashbrown::HashMap;
 use humansize::{file_size_opts, FileSize};
 use indicatif::ProgressBar;
 use string_cache::DefaultAtom as Atom;
 use walkdir::{DirEntry, WalkDir};
-
-#[derive(Debug)]
-pub struct FindStats {
-    pub n_bytes: u64,
-    pub n_dirs: u64,
-    pub n_files: u64,
-    pub n_precull_groups: u64,
-}
 
 #[derive(Eq, PartialEq, Hash, Debug)]
 pub struct GroupKey {
@@ -38,13 +31,33 @@ type StringToDentMap = HashMap<String, DirEntry>;
 type KeyToStringToDentMap = HashMap<GroupKey, StringToDentMap>;
 pub type KeyToDentsMap = HashMap<GroupKey, Vec<DirEntry>>;
 
-pub fn find_files(directories: &Vec<String>, options: &Options) -> (FindStats, KeyToDentsMap) {
+fn calculate_hash_stats(by_key: &KeyToDentsMap) -> HashStats {
+    let (n_files, n_bytes) = by_key
+        .values()
+        .fold((0u64, 0u64), |(n_files, total_size), dents| {
+            (
+                n_files + dents.len() as u64,
+                total_size
+                    + dents
+                        .iter()
+                        .fold(0u64, |acc, dent| acc + dent.metadata().unwrap().len()),
+            )
+        });
+    return HashStats {
+        n_files,
+        n_bytes,
+        n_groups: by_key.len() as u64,
+    };
+}
+
+pub fn find_files(options: &Options) -> (FindStats, HashStats, KeyToDentsMap) {
     let prog = ProgressBar::new_spinner();
     let mut n_dirs: u64 = 0;
     let mut n_files: u64 = 0;
     let mut n_bytes: u64 = 0;
     prog.set_draw_delta(100);
-    let by_key_and_paths = directories
+    let by_key_and_paths = options
+        .directories
         .iter()
         .map(|dir| {
             let mut by_key_and_path: KeyToStringToDentMap = HashMap::new();
@@ -93,7 +106,7 @@ pub fn find_files(directories: &Vec<String>, options: &Options) -> (FindStats, K
                 accmap
             });
     let mut by_key: KeyToDentsMap = HashMap::new();
-    let stats = FindStats {
+    let find_stats = FindStats {
         n_bytes: n_bytes,
         n_dirs: n_dirs,
         n_files: n_files,
@@ -105,5 +118,5 @@ pub fn find_files(directories: &Vec<String>, options: &Options) -> (FindStats, K
         }
     }
     prog.finish();
-    return (stats, by_key);
+    return (find_stats, calculate_hash_stats(&by_key), by_key);
 }

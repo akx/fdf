@@ -3,21 +3,23 @@ extern crate clap;
 extern crate humansize;
 extern crate rayon;
 extern crate regex;
+extern crate serde;
+extern crate serde_json;
 extern crate string_cache;
 extern crate walkdir;
 
-use clap::{App, Arg};
-use hashbrown::HashMap;
-use humansize::{file_size_opts, FileSize};
-use rayon::prelude::*;
-use regex::RegexSet;
-use walkdir::DirEntry;
 mod fdf;
+use clap::{App, Arg};
 use fdf::find::GroupKey;
 use fdf::options::Options;
+use humansize::{file_size_opts, FileSize};
+use regex::RegexSet;
+use std::error::Error;
+use std::result::Result;
+use walkdir::DirEntry;
 
-fn parse_args() -> clap::ArgMatches<'static> {
-    return App::new("fdf")
+fn parse_args() -> Result<Options, Box<Error>> {
+    let args = App::new("fdf")
         .version(crate_version!())
         .author(crate_authors!())
         .about("File duplicate finder")
@@ -43,6 +45,19 @@ fn parse_args() -> clap::ArgMatches<'static> {
                 .default_value("1000000000"),
         )
         .get_matches();
+    let directories = values_t!(args, "directory", String)?;
+    Ok(Options {
+        directories,
+        dir_exclude_regexes: RegexSet::new(&[r"node_modules|pycache|\.git|\.tox"])?,
+        dir_include_regexes: RegexSet::new(&([] as [String; 0]))?,
+        file_exclude_regexes: RegexSet::new(&([] as [String; 0]))?,
+        file_include_regexes: RegexSet::new(&([] as [String; 0]))?,
+        verbosity: args.occurrences_of("v"),
+        hash_bytes: args
+            .value_of("hash-bytes")
+            .unwrap_or("1000000000")
+            .parse()?,
+    })
 }
 
 fn process_key_group(key: &GroupKey, dents: &Vec<DirEntry>, options: &Options) {
@@ -69,44 +84,26 @@ fn process_key_group(key: &GroupKey, dents: &Vec<DirEntry>, options: &Options) {
 }
 
 fn main() {
-    let args = parse_args();
-    let directories = values_t!(args, "directory", String).unwrap();
-    let options = Options {
-        dir_exclude_regexes: RegexSet::new(&[r"node_modules|pycache|\.git|\.tox"]).unwrap(),
-        dir_include_regexes: RegexSet::new(&([] as [String; 0])).unwrap(),
-        file_exclude_regexes: RegexSet::new(&([] as [String; 0])).unwrap(),
-        file_include_regexes: RegexSet::new(&([] as [String; 0])).unwrap(),
-        verbosity: args.occurrences_of("v"),
-        hash_bytes: args.value_of("hash-bytes").unwrap().parse().unwrap(),
-    };
-    let (stats, by_key) = fdf::find::find_files(&directories, &options);
-    println!(
+    let options = parse_args().unwrap();
+    let (find_stats, hash_stats, by_key) = fdf::find::find_files(&options);
+    eprintln!(
         "Found {} files in {} directories ({} groups before culling), {}.",
-        stats.n_files,
-        stats.n_dirs,
-        stats.n_precull_groups,
-        stats
+        find_stats.n_files,
+        find_stats.n_dirs,
+        find_stats.n_precull_groups,
+        find_stats
             .n_bytes
             .file_size(file_size_opts::CONVENTIONAL)
             .unwrap()
     );
-    let (n_files, total_size) =
-        by_key
-            .values()
-            .fold((0u64, 0u64), |(n_files, total_size), dents| {
-                (
-                    n_files + dents.len() as u64,
-                    total_size
-                        + dents
-                            .iter()
-                            .fold(0u64, |acc, dent| acc + dent.metadata().unwrap().len()),
-                )
-            });
-    println!(
+    eprintln!(
         "Hashing {} groups, {} files, {}.",
-        by_key.len(),
-        n_files,
-        total_size.file_size(file_size_opts::CONVENTIONAL).unwrap()
+        hash_stats.n_groups,
+        hash_stats.n_files,
+        hash_stats
+            .n_bytes
+            .file_size(file_size_opts::CONVENTIONAL)
+            .unwrap()
     );
     let mut sorted_pairs = by_key.iter().collect::<Vec<(&GroupKey, &Vec<DirEntry>)>>();
     sorted_pairs.sort_unstable_by(|(ka, _), (kb, _)| kb.size.cmp(&ka.size));
