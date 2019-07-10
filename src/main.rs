@@ -12,30 +12,41 @@ mod fdf;
 use fdf::cli::parse_args;
 use fdf::find::GroupKey;
 use fdf::options::Options;
+use fdf::output::*;
 use humansize::{file_size_opts, FileSize};
+use std::error::Error;
+use std::result::Result;
 use walkdir::DirEntry;
 
-fn process_key_group(key: &GroupKey, dents: &Vec<DirEntry>, options: &Options) {
+fn process_key_group(key: &GroupKey, dents: &Vec<DirEntry>, options: &Options) -> KeyGroupResult {
     let size = key.size.file_size(file_size_opts::CONVENTIONAL).unwrap();
+    let identifier = key.extension.to_string();
     let mut header_printed: bool = false;
+    let mut kgr = KeyGroupResult {
+        size: key.size,
+        identifier: identifier.to_string(),
+        hash_groups: Vec::new(),
+    };
     for (hash, dents) in fdf::hash::hash_key_group(&dents, &options) {
         if dents.len() <= 1 {
             continue;
         }
+
         if !header_printed {
-            println!(
-                "### {} {:?}s ({} files)",
-                size,
-                &*key.extension,
-                dents.len()
-            );
+            println!("### {}/{} ({} files)", size, identifier, dents.len());
             header_printed = true;
         }
+        let mut files: Vec<String> = Vec::new();
         for dent in dents {
-            println!("{} {}", hash, dent.path().to_str().unwrap());
+            let filename = dent.path().to_str().unwrap();
+            println!("{} {}", hash, &filename);
+            files.push(filename.to_string());
         }
         println!("");
+        let hgr = HashGroupResult { hash, files };
+        kgr.hash_groups.push(hgr);
     }
+    kgr
 }
 
 fn main() {
@@ -62,7 +73,13 @@ fn main() {
     );
     let mut sorted_pairs = by_key.iter().collect::<Vec<(&GroupKey, &Vec<DirEntry>)>>();
     sorted_pairs.sort_unstable_by(|(ka, _), (kb, _)| kb.size.cmp(&ka.size));
-    sorted_pairs
+    let key_group_results = sorted_pairs
         .iter()
-        .for_each(|(key, dents)| process_key_group(key, dents, &options));
+        .map(|(key, dents)| process_key_group(key, dents, &options));
+    let gr = GrandResult {
+        find_stats,
+        hash_stats,
+        key_groups: key_group_results.collect(),
+    };
+    println!("{}", serde_json::to_string(&gr).unwrap());
 }
