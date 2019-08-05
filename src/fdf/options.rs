@@ -29,13 +29,14 @@ impl Options {
         if self.dir_include_regexes.len() > 0 && !self.dir_include_regexes.is_match(&path_str) {
             return false;
         }
-        return true;
+        true
     }
 
     pub fn is_entry_included(&self, dent: &DirEntry) -> bool {
-        match dent.file_type().is_dir() {
-            true => self.is_dir_included(dent.path().to_str().unwrap()),
-            false => self.is_file_included(dent.path().to_str().unwrap()),
+        if dent.file_type().is_dir() {
+            self.is_dir_included(dent.path().to_str().unwrap())
+        } else {
+            self.is_file_included(dent.path().to_str().unwrap())
         }
     }
 }

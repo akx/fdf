@@ -14,11 +14,9 @@ use fdf::find::GroupKey;
 use fdf::options::Options;
 use fdf::output::*;
 use humansize::{file_size_opts, FileSize};
-use std::error::Error;
-use std::result::Result;
 use walkdir::DirEntry;
 
-fn process_key_group(key: &GroupKey, dents: &Vec<DirEntry>, options: &Options) -> KeyGroupResult {
+fn process_key_group(key: &GroupKey, dents: &[DirEntry], options: &Options) -> KeyGroupResult {
     KeyGroupResult {
         size: key.size,
         identifier: key.extension.to_string(),
@@ -47,7 +45,7 @@ fn print_key_group_result(kgr: &KeyGroupResult) {
             for path in &hg.files {
                 println!("{} {}", hg.hash, path);
             }
-            println!("");
+            println!();
         }
     }
 }

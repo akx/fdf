@@ -21,10 +21,7 @@ fn group_key(dent: &DirEntry) -> GroupKey {
         Some(ps) => ps.to_str().unwrap(),
         None => dent.path().file_name().unwrap().to_str().unwrap(),
     });
-    return GroupKey {
-        size: size,
-        extension: extension,
-    };
+    GroupKey { size, extension }
 }
 
 type StringToDentMap = HashMap<String, DirEntry>;
@@ -43,11 +40,11 @@ fn calculate_hash_stats(by_key: &KeyToDentsMap) -> HashStats {
                         .fold(0u64, |acc, dent| acc + dent.metadata().unwrap().len()),
             )
         });
-    return HashStats {
+    HashStats {
         n_files,
         n_bytes,
         n_groups: by_key.len() as u64,
-    };
+    }
 }
 
 pub fn find_files(options: &Options) -> (FindStats, HashStats, KeyToDentsMap) {
@@ -74,7 +71,7 @@ pub fn find_files(options: &Options) -> (FindStats, HashStats, KeyToDentsMap) {
                     println!("{}", entry.path().display());
                 }
                 let key = group_key(&entry);
-                let by_path = by_key_and_path.entry(key).or_insert_with(|| HashMap::new());
+                let by_path = by_key_and_path.entry(key).or_insert_with(HashMap::new);
                 by_path.insert(entry.path().to_str().unwrap().to_string(), entry);
                 prog.set_message(
                     format!(
@@ -98,18 +95,15 @@ pub fn find_files(options: &Options) -> (FindStats, HashStats, KeyToDentsMap) {
             .into_iter()
             .fold(HashMap::new(), |mut accmap, map| {
                 for (key, ents) in map {
-                    accmap
-                        .entry(key)
-                        .or_insert_with(|| HashMap::new())
-                        .extend(ents);
+                    accmap.entry(key).or_insert_with(HashMap::new).extend(ents);
                 }
                 accmap
             });
     let mut by_key: KeyToDentsMap = HashMap::new();
     let find_stats = FindStats {
-        n_bytes: n_bytes,
-        n_dirs: n_dirs,
-        n_files: n_files,
+        n_bytes,
+        n_dirs,
+        n_files,
         n_precull_groups: by_key_and_path.len() as u64,
     };
     for (key, ent_map) in by_key_and_path {
@@ -118,5 +112,5 @@ pub fn find_files(options: &Options) -> (FindStats, HashStats, KeyToDentsMap) {
         }
     }
     prog.finish();
-    return (find_stats, calculate_hash_stats(&by_key), by_key);
+    (find_stats, calculate_hash_stats(&by_key), by_key)
 }

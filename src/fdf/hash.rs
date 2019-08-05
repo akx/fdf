@@ -12,7 +12,7 @@ fn hash_file<'a>(
     options: &Options,
 ) -> Result<(&'a DirEntry, String), Box<Error>> {
     let f = File::open(dent.path())?;
-    let mut buf = vec![0; 524288];
+    let mut buf = vec![0; 524_288];
     let mut hasher = Sha256::new();
     let mut flimit = f.take(options.hash_bytes);
     loop {
@@ -31,7 +31,7 @@ fn hash_file<'a>(
 }
 
 pub fn hash_key_group<'a>(
-    dents: &'a Vec<DirEntry>,
+    dents: &'a [DirEntry],
     options: &Options,
 ) -> HashMap<String, Vec<&'a DirEntry>> {
     let hashes: Vec<Result<(&DirEntry, String), ()>> = dents
@@ -46,9 +46,8 @@ pub fn hash_key_group<'a>(
         .collect();
     let mut hm: HashMap<String, Vec<&DirEntry>> = HashMap::new();
     for res in hashes {
-        match res {
-            Ok((dent, hash)) => hm.entry(hash).or_insert_with(|| Vec::new()).push(dent),
-            _ => (),
+        if let Ok((dent, hash)) = res {
+            hm.entry(hash).or_insert_with(Vec::new).push(dent)
         }
     }
     hm
