@@ -4,7 +4,7 @@ use regex::RegexSet;
 use std::error::Error;
 use std::result::Result;
 
-pub fn parse_args() -> Result<Options, Box<Error>> {
+pub fn parse_args() -> Result<Options, Box<dyn Error>> {
     let args = App::new("fdf")
         .version(crate_version!())
         .author(crate_authors!())

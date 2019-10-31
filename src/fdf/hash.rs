@@ -10,7 +10,7 @@ use walkdir::DirEntry;
 fn hash_file<'a>(
     dent: &'a DirEntry,
     options: &Options,
-) -> Result<(&'a DirEntry, String), Box<Error>> {
+) -> Result<(&'a DirEntry, String), Box<dyn Error>> {
     let f = File::open(dent.path())?;
     let mut buf = vec![0; 524_288];
     let mut hasher = Sha256::new();
