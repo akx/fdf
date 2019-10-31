@@ -13,28 +13,20 @@ jobs:
       matrix:
         os: [ubuntu-18.04, windows-2019, macOS-10.14]
     steps:
-      - name: Dump job context
-        env:
-          JOB_CONTEXT: ${{ toJson(job) }}
-        run: echo "$JOB_CONTEXT"
-      - name: Dump steps context
-        env:
-          STEPS_CONTEXT: ${{ toJson(steps) }}
-        run: echo "$STEPS_CONTEXT"
-      - name: Dump runner context
-        env:
-          RUNNER_CONTEXT: ${{ toJson(runner) }}
-        run: echo "$RUNNER_CONTEXT"
       - name: Install Rust
         uses: actions-rs/toolchain@v1
-        # TODO: run this only on macOS?
         with:
             toolchain: stable
       - uses: actions/checkout@v1
       - name: Build
         run: cargo build --release
       - uses: actions/upload-artifact@master
+        if: runner.os != "Windows"
         with:
           name: fdf-${{ matrix.os }}
           path: target/release/fdf
-
+      - uses: actions/upload-artifact@master
+        if: runner.os == "Windows"
+        with:
+          name: fdf-${{ matrix.os }}.exe
+          path: target/release/fdf.exe
