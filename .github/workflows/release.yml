@@ -21,12 +21,12 @@ jobs:
       - name: Build
         run: cargo build --release
       - uses: actions/upload-artifact@master
-        if: runner.os != "Windows"
+        if: runner.os != 'Windows'
         with:
           name: fdf-${{ matrix.os }}
           path: target/release/fdf
       - uses: actions/upload-artifact@master
-        if: runner.os == "Windows"
+        if: runner.os == 'Windows'
         with:
           name: fdf-${{ matrix.os }}.exe
           path: target/release/fdf.exe
