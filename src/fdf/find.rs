@@ -65,8 +65,12 @@ pub fn find_files(options: &Options) -> (FindStats, HashStats, KeyToDentsMap) {
                     n_dirs += 1;
                     continue;
                 }
+                let size = entry.metadata().unwrap().len();
+                if size == 0 {
+                    continue;
+                }
                 n_files += 1;
-                n_bytes += entry.metadata().unwrap().len();
+                n_bytes += size;
                 if options.verbosity >= 3 {
                     println!("{}", entry.path().display());
                 }
