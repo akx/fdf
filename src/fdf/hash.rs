@@ -6,7 +6,7 @@ use rayon::prelude::*;
 use sha2::{Digest, Sha256};
 use std::error::Error;
 use std::fs::File;
-use std::io::{copy, Read};
+use std::io::{copy, BufReader, Read};
 use walkdir::DirEntry;
 
 fn hash_file<'a>(
@@ -14,19 +14,21 @@ fn hash_file<'a>(
     dent: &'a DirEntry,
     options: &Options,
 ) -> Result<(&'a DirEntry, String), Box<dyn Error>> {
-    let mut f = File::open(dent.path())?.take(options.hash_bytes);
+    let f = File::open(dent.path())?.take(options.hash_bytes);
+    let buf_cap = options.hash_bytes.min(524_288).max(8_192) as usize;
+    let mut reader = BufReader::with_capacity(buf_cap, f);
     let hash: String;
     match options.hash_algorithm {
         HashAlgorithm::Sha256 => {
             let mut sha256 = Sha256::new();
-            let n = copy(&mut f, &mut sha256)?;
+            let n = copy(&mut reader, &mut sha256)?;
             assert!(n <= options.hash_bytes);
             hash = hex::encode(sha256.result());
         }
         HashAlgorithm::Murmur3 => {
             let mut murmur3_buf: [u8; 16] = [0; 16];
             let seed: u32 = (key.size % (std::u32::MAX as u64)) as u32;
-            murmur3_x64_128(&mut f, seed, &mut murmur3_buf);
+            murmur3_x64_128(&mut reader, seed, &mut murmur3_buf);
             hash = format!("m{}", hex::encode(murmur3_buf));
         }
     }
