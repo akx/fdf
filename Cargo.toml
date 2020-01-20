@@ -1,6 +1,6 @@
 [package]
 name = "fdf"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Aarni Koskela <akx@iki.fi>"]
 edition = "2018"
 
