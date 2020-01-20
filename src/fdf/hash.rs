@@ -1,28 +1,22 @@
-use super::options::Options;
+use super::options::{Options, HashAlgorithm};
 use hashbrown::HashMap;
 use rayon::prelude::*;
 use sha2::{Digest, Sha256};
 use std::error::Error;
 use std::fs::File;
-use std::io::Read;
+use std::io::{copy, Read};
 use walkdir::DirEntry;
+//use super::digest_wrap::{DigestWrap, SHA256Wrap};
 
 fn hash_file<'a>(
     dent: &'a DirEntry,
     options: &Options,
 ) -> Result<(&'a DirEntry, String), Box<dyn Error>> {
     let f = File::open(dent.path())?;
-    let mut buf = vec![0; 524_288];
     let mut hasher = Sha256::new();
     let mut flimit = f.take(options.hash_bytes);
-    loop {
-        let n_read = flimit.read(&mut buf)?;
-        if n_read == 0 {
-            break;
-        }
-        hasher.input(&buf[0..n_read]);
-    }
-    // todo: verify we only read up to options.hash_bytes bytes?
+    let n = copy(&mut flimit, &mut hasher)?;
+    assert!(n <= options.hash_bytes);
     let hash = hex::encode(hasher.result());
     if options.verbosity >= 2 {
         println!("{} {}", dent.path().display(), hash);
