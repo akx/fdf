@@ -1,23 +1,36 @@
-use super::options::{Options, HashAlgorithm};
+use super::options::{HashAlgorithm, Options};
+use crate::fdf::find::GroupKey;
 use hashbrown::HashMap;
+use murmur3::murmur3_x64_128;
 use rayon::prelude::*;
 use sha2::{Digest, Sha256};
 use std::error::Error;
 use std::fs::File;
 use std::io::{copy, Read};
 use walkdir::DirEntry;
-//use super::digest_wrap::{DigestWrap, SHA256Wrap};
 
 fn hash_file<'a>(
+    key: &'a GroupKey,
     dent: &'a DirEntry,
     options: &Options,
 ) -> Result<(&'a DirEntry, String), Box<dyn Error>> {
-    let f = File::open(dent.path())?;
-    let mut hasher = Sha256::new();
-    let mut flimit = f.take(options.hash_bytes);
-    let n = copy(&mut flimit, &mut hasher)?;
-    assert!(n <= options.hash_bytes);
-    let hash = hex::encode(hasher.result());
+    let mut f = File::open(dent.path())?.take(options.hash_bytes);
+    let hash: String;
+    match options.hash_algorithm {
+        HashAlgorithm::Sha256 => {
+            let mut sha256 = Sha256::new();
+            let n = copy(&mut f, &mut sha256)?;
+            assert!(n <= options.hash_bytes);
+            hash = hex::encode(sha256.result());
+        }
+        HashAlgorithm::Murmur3 => {
+            let mut murmur3_buf: [u8; 16] = [0; 16];
+            let seed: u32 = (key.size % (std::u32::MAX as u64)) as u32;
+            murmur3_x64_128(&mut f, seed, &mut murmur3_buf);
+            hash = format!("m{}", hex::encode(murmur3_buf));
+        }
+    }
+
     if options.verbosity >= 2 {
         println!("{} {}", dent.path().display(), hash);
     }
@@ -25,12 +38,13 @@ fn hash_file<'a>(
 }
 
 pub fn hash_key_group<'a>(
+    key: &'a GroupKey,
     dents: &'a [DirEntry],
     options: &Options,
 ) -> HashMap<String, Vec<&'a DirEntry>> {
     let hashes: Vec<Result<(&DirEntry, String), ()>> = dents
         .par_iter()
-        .map(|dent| match hash_file(dent, options) {
+        .map(|dent| match hash_file(key, dent, options) {
             Ok(v) => Ok(v),
             Err(x) => {
                 println!("Unable to hash {:?}: {}", dent, x);

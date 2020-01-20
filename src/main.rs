@@ -20,7 +20,7 @@ fn process_key_group(key: &GroupKey, dents: &[DirEntry], options: &Options) -> K
     KeyGroupResult {
         size: key.size,
         identifier: key.extension.to_string(),
-        hash_groups: fdf::hash::hash_key_group(&dents, &options)
+        hash_groups: fdf::hash::hash_key_group(&key, &dents, &options)
             .iter()
             .map(|(hash, dents)| HashGroupResult {
                 hash: hash.to_string(),
