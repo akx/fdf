@@ -3,8 +3,21 @@ use super::output::{FindStats, HashStats};
 use hashbrown::HashMap;
 use humansize::{file_size_opts, FileSize};
 use indicatif::ProgressBar;
+use std::path::Path;
 use string_cache::DefaultAtom as Atom;
 use walkdir::{DirEntry, WalkDir};
+
+#[derive(Clone, Debug)]
+pub struct AugDirEntry {
+    pub dir_entry: DirEntry,
+    pub size: u64,
+}
+
+impl AugDirEntry {
+    pub fn path(&self) -> &Path {
+        &self.dir_entry.path()
+    }
+}
 
 #[derive(Eq, PartialEq, Hash, Debug)]
 pub struct GroupKey {
@@ -12,11 +25,8 @@ pub struct GroupKey {
     pub extension: Atom,
 }
 
-fn group_key(dent: &DirEntry) -> GroupKey {
-    let size = match dent.metadata() {
-        Ok(s) => s.len(),
-        Err(_) => 0,
-    };
+fn group_key(dent: &AugDirEntry) -> GroupKey {
+    let size = dent.size;
     let extension = Atom::from(match dent.path().extension() {
         Some(ps) => ps.to_str().unwrap(),
         None => dent.path().file_name().unwrap().to_str().unwrap(),
@@ -24,9 +34,9 @@ fn group_key(dent: &DirEntry) -> GroupKey {
     GroupKey { size, extension }
 }
 
-type StringToDentMap = HashMap<String, DirEntry>;
+type StringToDentMap = HashMap<String, AugDirEntry>;
 type KeyToStringToDentMap = HashMap<GroupKey, StringToDentMap>;
-pub type KeyToDentsMap = HashMap<GroupKey, Vec<DirEntry>>;
+pub type KeyToDentsMap = HashMap<GroupKey, Vec<AugDirEntry>>;
 
 fn calculate_hash_stats(by_key: &KeyToDentsMap) -> HashStats {
     let (n_files, n_bytes) = by_key
@@ -34,10 +44,7 @@ fn calculate_hash_stats(by_key: &KeyToDentsMap) -> HashStats {
         .fold((0u64, 0u64), |(n_files, total_size), dents| {
             (
                 n_files + dents.len() as u64,
-                total_size
-                    + dents
-                        .iter()
-                        .fold(0u64, |acc, dent| acc + dent.metadata().unwrap().len()),
+                total_size + dents.iter().fold(0u64, |acc, dent| acc + dent.size),
             )
         });
     HashStats {
@@ -78,9 +85,14 @@ pub fn find_files(options: &Options) -> (FindStats, HashStats, KeyToDentsMap) {
                 if options.verbosity >= 3 {
                     println!("{}", entry.path().display());
                 }
-                let key = group_key(&entry);
+                let path_str = entry.path().to_str().unwrap().to_string();
+                let aug_entry = AugDirEntry {
+                    dir_entry: entry,
+                    size,
+                };
+                let key = group_key(&aug_entry);
                 let by_path = by_key_and_path.entry(key).or_insert_with(HashMap::new);
-                by_path.insert(entry.path().to_str().unwrap().to_string(), entry);
+                by_path.insert(path_str, aug_entry);
                 prog.set_message(
                     format!(
                         "{} dirs, {} files, {}...",
