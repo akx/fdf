@@ -65,6 +65,10 @@ pub fn find_files(options: &Options) -> (FindStats, HashStats, KeyToDentsMap) {
                     n_dirs += 1;
                     continue;
                 }
+                // TODO: Process symlinks gracefully
+                if entry.file_type().is_symlink() {
+                    continue;
+                }
                 let size = entry.metadata().unwrap().len();
                 if size == 0 {
                     continue;
