@@ -9,11 +9,13 @@ extern crate string_cache;
 extern crate walkdir;
 
 mod fdf;
+
 use fdf::cli::parse_args;
 use fdf::find::GroupKey;
 use fdf::options::Options;
 use fdf::output::*;
 use humansize::{file_size_opts, FileSize};
+use std::time::Instant;
 use walkdir::DirEntry;
 
 fn process_key_group(key: &GroupKey, dents: &[DirEntry], options: &Options) -> KeyGroupResult {
@@ -51,7 +53,12 @@ fn print_key_group_result(kgr: &KeyGroupResult) {
 }
 
 fn main() {
-    let options = parse_args().unwrap();
+    let mut options = parse_args().unwrap();
+    if !(options.report_json || options.report_human) {
+        eprintln!("No output arguments set; assuming human output desired.");
+        options.report_human = true;
+    }
+    let start_time = Instant::now();
     let (find_stats, hash_stats, by_key) = fdf::find::find_files(&options);
     eprintln!(
         "Found {} files in {} directories ({} groups before culling), {}.",
@@ -78,14 +85,31 @@ fn main() {
         .iter()
         .map(|(key, dents)| {
             let kgr = process_key_group(key, dents, &options);
-            print_key_group_result(&kgr);
+            if options.report_human {
+                print_key_group_result(&kgr);
+            }
             kgr
         })
         .collect();
-    let gr = GrandResult {
-        find_stats,
-        hash_stats,
-        key_groups: key_group_results,
-    };
-    println!("{}", serde_json::to_string(&gr).unwrap());
+    if options.report_json {
+        let gr = GrandResult {
+            find_stats: &find_stats,
+            hash_stats: &hash_stats,
+            key_groups: &key_group_results,
+        };
+        println!("{}", serde_json::to_string(&gr).unwrap());
+    }
+    let end_time = Instant::now();
+    let time = (end_time - start_time).as_secs_f32();
+    let files_per_sec = (hash_stats.n_files as f32 / time) as u32;
+    let bytes_per_sec = ((hash_stats.n_bytes) as f32 / time) as u32;
+
+    eprintln!(
+        "Finished in {} seconds ({} files/sec, {}/sec).",
+        time,
+        files_per_sec,
+        bytes_per_sec
+            .file_size(file_size_opts::CONVENTIONAL)
+            .unwrap(),
+    );
 }
