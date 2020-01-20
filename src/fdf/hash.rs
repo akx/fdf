@@ -1,5 +1,5 @@
+use super::find::{AugDirEntry, GroupKey};
 use super::options::{HashAlgorithm, Options};
-use crate::fdf::find::GroupKey;
 use hashbrown::HashMap;
 use murmur3::murmur3_x64_128;
 use rayon::prelude::*;
@@ -7,14 +7,13 @@ use sha2::{Digest, Sha256};
 use std::error::Error;
 use std::fs::File;
 use std::io::{copy, BufReader, Read};
-use walkdir::DirEntry;
 
 fn hash_file<'a>(
     key: &'a GroupKey,
-    dent: &'a DirEntry,
+    dent: &'a AugDirEntry,
     options: &Options,
-) -> Result<(&'a DirEntry, String), Box<dyn Error>> {
-    let f = File::open(dent.path())?.take(options.hash_bytes);
+) -> Result<(&'a AugDirEntry, String), Box<dyn Error>> {
+    let f = File::open(dent.dir_entry.path())?.take(options.hash_bytes);
     let buf_cap = options.hash_bytes.min(524_288).max(8_192) as usize;
     let mut reader = BufReader::with_capacity(buf_cap, f);
     let hash: String;
@@ -42,10 +41,10 @@ fn hash_file<'a>(
 
 pub fn hash_key_group<'a>(
     key: &'a GroupKey,
-    dents: &'a [DirEntry],
+    dents: &'a [AugDirEntry],
     options: &Options,
-) -> HashMap<String, Vec<&'a DirEntry>> {
-    let hashes: Vec<Result<(&DirEntry, String), ()>> = dents
+) -> HashMap<String, Vec<&'a AugDirEntry>> {
+    let hashes: Vec<Result<(&AugDirEntry, String), ()>> = dents
         .par_iter()
         .map(|dent| match hash_file(key, dent, options) {
             Ok(v) => Ok(v),
@@ -55,7 +54,7 @@ pub fn hash_key_group<'a>(
             }
         })
         .collect();
-    let mut hm: HashMap<String, Vec<&DirEntry>> = HashMap::new();
+    let mut hm: HashMap<String, Vec<&AugDirEntry>> = HashMap::new();
     for res in hashes {
         if let Ok((dent, hash)) = res {
             hm.entry(hash).or_insert_with(Vec::new).push(dent)

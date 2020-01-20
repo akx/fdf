@@ -11,16 +11,15 @@ extern crate walkdir;
 mod fdf;
 
 use fdf::cli::parse_args;
-use fdf::find::{GroupKey, KeyToDentsMap};
+use fdf::find::{AugDirEntry, GroupKey, KeyToDentsMap};
 use fdf::options::Options;
 use fdf::output::*;
 use humansize::{file_size_opts, FileSize};
 use indicatif::{ProgressBar, ProgressStyle};
 use rayon::prelude::*;
 use std::time::{Duration, Instant};
-use walkdir::DirEntry;
 
-fn process_key_group(key: &GroupKey, dents: &[DirEntry], options: &Options) -> KeyGroupResult {
+fn process_key_group(key: &GroupKey, dents: &[AugDirEntry], options: &Options) -> KeyGroupResult {
     KeyGroupResult {
         size: key.size,
         identifier: key.extension.to_string(),
@@ -55,7 +54,9 @@ fn print_key_group_result(kgr: &KeyGroupResult) {
 }
 
 fn do_hash(options: &mut Options, by_key: KeyToDentsMap) -> Vec<KeyGroupResult> {
-    let mut sorted_pairs = by_key.iter().collect::<Vec<(&GroupKey, &Vec<DirEntry>)>>();
+    let mut sorted_pairs = by_key
+        .iter()
+        .collect::<Vec<(&GroupKey, &Vec<AugDirEntry>)>>();
     sorted_pairs.sort_unstable_by(|(ka, _), (kb, _)| kb.size.cmp(&ka.size));
     let prog = ProgressBar::new(sorted_pairs.len() as u64);
     prog.set_style(
