@@ -1,4 +1,4 @@
-use super::options::Options;
+use super::options::{HashAlgorithm, Options};
 use clap::{App, Arg};
 use regex::RegexSet;
 use std::error::Error;
@@ -30,6 +30,14 @@ pub fn parse_args() -> Result<Options, Box<dyn Error>> {
                 .help("Hash N first bytes only?")
                 .default_value("1000000000"),
         )
+        .arg(
+            Arg::with_name("hash-algorithm")
+                .short("a")
+                .takes_value(true)
+                .help("Hash algorithm selection")
+                .possible_values(&HashAlgorithm::variants())
+                .default_value("Sha256"),
+        )
         .get_matches();
     let directories = values_t!(args, "directory", String)?;
     Ok(Options {
@@ -39,9 +47,7 @@ pub fn parse_args() -> Result<Options, Box<dyn Error>> {
         file_exclude_regexes: RegexSet::new(&([] as [String; 0]))?,
         file_include_regexes: RegexSet::new(&([] as [String; 0]))?,
         verbosity: args.occurrences_of("v"),
-        hash_bytes: args
-            .value_of("hash-bytes")
-            .unwrap_or("1000000000")
-            .parse()?,
+        hash_bytes: value_t!(args, "hash-bytes", u64).unwrap(),
+        hash_algorithm: value_t!(args, "hash-algorithm", HashAlgorithm).unwrap(),
     })
 }

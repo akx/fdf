@@ -1,6 +1,13 @@
 use regex::RegexSet;
 use walkdir::DirEntry;
 
+arg_enum! {
+    pub enum HashAlgorithm {
+        Sha256,
+        Murmur3,
+    }
+}
+
 pub struct Options {
     pub directories: Vec<String>,
     pub file_include_regexes: RegexSet,
@@ -9,6 +16,7 @@ pub struct Options {
     pub dir_exclude_regexes: RegexSet,
     pub verbosity: u64,
     pub hash_bytes: u64,
+    pub hash_algorithm: HashAlgorithm,
 }
 
 impl Options {
