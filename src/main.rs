@@ -91,6 +91,31 @@ fn print_stage_duration(label: &str, hash_stats: &HashStats, d: Duration) {
     );
 }
 
+fn print_duplicate_info(key_group_results: &Vec<KeyGroupResult>) {
+    let mut n_duplicate_files: u64 = 0;
+    let mut n_bytes_wasted: u64 = 0;
+    for kgr in key_group_results.iter() {
+        for hg in &kgr.hash_groups {
+            if hg.files.len() > 1 {
+                let n = (hg.files.len() - 1) as u64;
+                n_duplicate_files += n;
+                n_bytes_wasted += kgr.size * n;
+            }
+        }
+    }
+    if n_duplicate_files > 0 {
+        eprintln!(
+            "{} duplicate files, {} wasted.",
+            n_duplicate_files,
+            n_bytes_wasted
+                .file_size(file_size_opts::CONVENTIONAL)
+                .unwrap(),
+        );
+    } else {
+        eprintln!("No duplicates.");
+    }
+}
+
 fn main() {
     let mut options = parse_args().unwrap();
     if !(options.report_json || options.report_human) {
@@ -136,6 +161,7 @@ fn main() {
         };
         println!("{}", serde_json::to_string(&gr).unwrap());
     }
+    print_duplicate_info(&key_group_results);
     print_stage_duration("Output", &hash_stats, output_start_time.elapsed());
     print_stage_duration("Finished", &hash_stats, start_time.elapsed());
 }
