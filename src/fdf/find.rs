@@ -115,6 +115,8 @@ pub fn find_files(options: &Options) -> (FindStats, HashStats, KeyToDentsMap) {
             by_key.insert(key, ent_map.values().cloned().collect());
         }
     }
-    prog.finish();
-    (find_stats, calculate_hash_stats(&by_key), by_key)
+    prog.set_message("Calculating statistics...");
+    let stats = calculate_hash_stats(&by_key);
+    prog.finish_and_clear();
+    (find_stats, stats, by_key)
 }

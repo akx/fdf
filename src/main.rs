@@ -11,11 +11,13 @@ extern crate walkdir;
 mod fdf;
 
 use fdf::cli::parse_args;
-use fdf::find::GroupKey;
+use fdf::find::{GroupKey, KeyToDentsMap};
 use fdf::options::Options;
 use fdf::output::*;
 use humansize::{file_size_opts, FileSize};
-use std::time::Instant;
+use indicatif::{ProgressBar, ProgressStyle};
+use rayon::prelude::*;
+use std::time::{Duration, Instant};
 use walkdir::DirEntry;
 
 fn process_key_group(key: &GroupKey, dents: &[DirEntry], options: &Options) -> KeyGroupResult {
@@ -52,6 +54,42 @@ fn print_key_group_result(kgr: &KeyGroupResult) {
     }
 }
 
+fn do_hash(options: &mut Options, by_key: KeyToDentsMap) -> Vec<KeyGroupResult> {
+    let mut sorted_pairs = by_key.iter().collect::<Vec<(&GroupKey, &Vec<DirEntry>)>>();
+    sorted_pairs.sort_unstable_by(|(ka, _), (kb, _)| kb.size.cmp(&ka.size));
+    let prog = ProgressBar::new(sorted_pairs.len() as u64);
+    prog.set_style(
+        ProgressStyle::default_bar().template("{pos:>6}/{len:6} {msg} (ETA {eta}) {wide_bar}"),
+    );
+
+    let key_group_results: Vec<KeyGroupResult> = sorted_pairs
+        .iter()
+        .map(|(key, dents)| {
+            prog.set_message(format!("{}/{}", key.extension, key.size).as_str());
+            prog.inc(1);
+            process_key_group(key, dents, &options)
+        })
+        .collect();
+    prog.finish();
+    key_group_results
+}
+
+fn print_stage_duration(label: &str, hash_stats: &HashStats, d: Duration) {
+    let time = d.as_secs_f32();
+    let files_per_sec = (hash_stats.n_files as f32 / time) as u32;
+    let bytes_per_sec = ((hash_stats.n_bytes) as f32 / time) as u32;
+
+    eprintln!(
+        "{}: {} seconds ({} files/sec, {}/sec).",
+        label,
+        time,
+        files_per_sec,
+        bytes_per_sec
+            .file_size(file_size_opts::CONVENTIONAL)
+            .unwrap(),
+    );
+}
+
 fn main() {
     let mut options = parse_args().unwrap();
     if !(options.report_json || options.report_human) {
@@ -61,10 +99,11 @@ fn main() {
     let start_time = Instant::now();
     let (find_stats, hash_stats, by_key) = fdf::find::find_files(&options);
     eprintln!(
-        "Found {} files in {} directories ({} groups before culling), {}.",
+        "Found {} files in {} directories ({} groups before culling) in {:.2} s, {}.",
         find_stats.n_files,
         find_stats.n_dirs,
         find_stats.n_precull_groups,
+        start_time.elapsed().as_secs_f32(),
         find_stats
             .n_bytes
             .file_size(file_size_opts::CONVENTIONAL)
@@ -79,18 +118,15 @@ fn main() {
             .file_size(file_size_opts::CONVENTIONAL)
             .unwrap()
     );
-    let mut sorted_pairs = by_key.iter().collect::<Vec<(&GroupKey, &Vec<DirEntry>)>>();
-    sorted_pairs.sort_unstable_by(|(ka, _), (kb, _)| kb.size.cmp(&ka.size));
-    let key_group_results = sorted_pairs
-        .iter()
-        .map(|(key, dents)| {
-            let kgr = process_key_group(key, dents, &options);
-            if options.report_human {
-                print_key_group_result(&kgr);
-            }
-            kgr
-        })
-        .collect();
+    let hash_start_time = Instant::now();
+    let key_group_results = do_hash(&mut options, by_key);
+    print_stage_duration("Hashing", &hash_stats, hash_start_time.elapsed());
+    let output_start_time = Instant::now();
+    if options.report_human {
+        for kgr in key_group_results.iter() {
+            print_key_group_result(&kgr);
+        }
+    }
     if options.report_json {
         let gr = GrandResult {
             find_stats: &find_stats,
@@ -99,17 +135,6 @@ fn main() {
         };
         println!("{}", serde_json::to_string(&gr).unwrap());
     }
-    let end_time = Instant::now();
-    let time = (end_time - start_time).as_secs_f32();
-    let files_per_sec = (hash_stats.n_files as f32 / time) as u32;
-    let bytes_per_sec = ((hash_stats.n_bytes) as f32 / time) as u32;
-
-    eprintln!(
-        "Finished in {} seconds ({} files/sec, {}/sec).",
-        time,
-        files_per_sec,
-        bytes_per_sec
-            .file_size(file_size_opts::CONVENTIONAL)
-            .unwrap(),
-    );
+    print_stage_duration("Output", &hash_stats, output_start_time.elapsed());
+    print_stage_duration("Finished", &hash_stats, start_time.elapsed());
 }
