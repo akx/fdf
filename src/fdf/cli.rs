@@ -38,6 +38,12 @@ pub fn parse_args() -> Result<Options, Box<dyn Error>> {
                 .possible_values(&HashAlgorithm::variants())
                 .default_value("Sha256"),
         )
+        .arg(Arg::with_name("json").short("j").help("Output JSON?"))
+        .arg(
+            Arg::with_name("human")
+                .short("h")
+                .help("Output human-readable?"),
+        )
         .get_matches();
     let directories = values_t!(args, "directory", String)?;
     Ok(Options {
@@ -49,5 +55,7 @@ pub fn parse_args() -> Result<Options, Box<dyn Error>> {
         verbosity: args.occurrences_of("v"),
         hash_bytes: value_t!(args, "hash-bytes", u64).unwrap(),
         hash_algorithm: value_t!(args, "hash-algorithm", HashAlgorithm).unwrap(),
+        report_human: args.is_present("human"),
+        report_json: args.is_present("json"),
     })
 }

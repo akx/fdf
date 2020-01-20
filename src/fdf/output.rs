@@ -30,8 +30,8 @@ pub struct KeyGroupResult {
 }
 
 #[derive(Debug, Serialize)]
-pub struct GrandResult {
-    pub find_stats: FindStats,
-    pub hash_stats: HashStats,
-    pub key_groups: Vec<KeyGroupResult>,
+pub struct GrandResult<'a> {
+    pub find_stats: &'a FindStats,
+    pub hash_stats: &'a HashStats,
+    pub key_groups: &'a Vec<KeyGroupResult>,
 }

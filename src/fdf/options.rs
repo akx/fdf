@@ -17,6 +17,8 @@ pub struct Options {
     pub verbosity: u64,
     pub hash_bytes: u64,
     pub hash_algorithm: HashAlgorithm,
+    pub report_json: bool,
+    pub report_human: bool,
 }
 
 impl Options {
