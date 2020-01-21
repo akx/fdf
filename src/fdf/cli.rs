@@ -32,6 +32,14 @@ pub fn parse_args() -> Result<Options, Box<dyn Error>> {
                 .help("Add directory to search"),
         )
         .arg(
+            Arg::with_name("file-list")
+                .long("file-list")
+                .multiple(true)
+                .value_name("FILENAME")
+                .takes_value(true)
+                .help("Add file list to use"),
+        )
+        .arg(
             Arg::with_name("v")
                 .short("v")
                 .long("verbose")
@@ -120,7 +128,8 @@ pub fn parse_args() -> Result<Options, Box<dyn Error>> {
         )
         .get_matches();
     Ok(Options {
-        directories: values_t!(args, "directory", String)?,
+        directories: values_t!(args, "directory", String).unwrap_or_else(|_| Vec::new()),
+        file_lists: values_t!(args, "file-list", String).unwrap_or_else(|_| Vec::new()),
         dir_exclude_regexes: RegexSet::new(
             &values_t!(args, "dir-exclude-re", String).unwrap_or_else(|_| Vec::new()),
         )?,

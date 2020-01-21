@@ -1,3 +1,5 @@
+#![allow(unused_imports)]
+
 #[macro_use]
 extern crate clap;
 extern crate humansize;
@@ -20,6 +22,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use rayon::prelude::*;
 use std::fs::File;
 use std::io::{stdout, Write};
+use std::process::exit;
 use std::time::{Duration, Instant};
 
 fn process_key_group(key: &GroupKey, dents: &[AugDirEntry], options: &Options) -> KeyGroupResult {
@@ -152,6 +155,10 @@ where
 
 fn main() {
     let mut options = parse_args().unwrap();
+    if options.file_lists.len() == 0 && options.directories.len() == 0 {
+        eprintln!("No file lists or directories set; nothing to do.");
+        exit(1);
+    }
     if options.report_json == ReportOption::None && options.report_human == ReportOption::None {
         eprintln!("No output arguments set; assuming human output to stdout desired.");
         options.report_human = ReportOption::Stdout;

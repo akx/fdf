@@ -19,6 +19,7 @@ pub enum ReportOption {
 #[derive(Debug)]
 pub struct Options {
     pub directories: Vec<String>,
+    pub file_lists: Vec<String>,
     pub file_include_regexes: RegexSet,
     pub file_exclude_regexes: RegexSet,
     pub dir_include_regexes: RegexSet,

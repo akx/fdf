@@ -3,14 +3,16 @@ use super::output::{FindStats, HashStats};
 use hashbrown::HashMap;
 use humansize::{file_size_opts, FileSize};
 use indicatif::ProgressBar;
-use std::path::Path;
+use std::fs;
+use std::io::{BufRead, BufReader};
+use std::path::{Path, PathBuf};
 use string_cache::DefaultAtom as Atom;
 use walkdir::{DirEntry, WalkDir};
 
 #[derive(Clone, Debug)]
 pub struct AugDirEntry {
     pub dir_entry: DirEntry,
-    pub size: u64,
+    pub metadata: fs::Metadata,
 }
 
 impl AugDirEntry {
@@ -26,7 +28,7 @@ pub struct GroupKey {
 }
 
 fn group_key(dent: &AugDirEntry) -> GroupKey {
-    let size = dent.size;
+    let size = dent.metadata.len();
     let extension = Atom::from(match dent.path().extension() {
         Some(ps) => ps.to_str().unwrap(),
         None => dent.path().file_name().unwrap().to_str().unwrap(),
@@ -44,7 +46,10 @@ fn calculate_hash_stats(by_key: &KeyToDentsMap) -> HashStats {
         .fold((0u64, 0u64), |(n_files, total_size), dents| {
             (
                 n_files + dents.len() as u64,
-                total_size + dents.iter().fold(0u64, |acc, dent| acc + dent.size),
+                total_size
+                    + dents
+                        .iter()
+                        .fold(0u64, |acc, dent| acc + dent.metadata.len()),
             )
         });
     HashStats {
@@ -57,28 +62,43 @@ fn calculate_hash_stats(by_key: &KeyToDentsMap) -> HashStats {
 fn process_entry(
     options: &Options,
     by_key_and_path: &mut KeyToStringToDentMap,
-    entry: DirEntry,
+    entry_pair: EntryPair,
 ) -> FindStats {
+    let (dir_entry, pre_metadata) = entry_pair;
     // TODO: Process symlinks gracefully
-    if entry.file_type().is_dir() || entry.file_type().is_symlink() {
+    if dir_entry.file_type().is_dir() || dir_entry.file_type().is_symlink() {
         return FindStats::zero();
     }
-    let size = entry.metadata().unwrap().len();
+    let metadata = match pre_metadata {
+        None => dir_entry.metadata().unwrap(),
+        Some(m) => m,
+    };
+    let size = metadata.len();
     if size == 0 {
         return FindStats::zero();
     }
     if options.verbosity >= 3 {
-        println!("{}", entry.path().display());
+        println!("{}", dir_entry.path().display());
     }
-    let path_str = entry.path().to_str().unwrap().to_string();
+    let path_str = dir_entry.path().to_str().unwrap().to_string();
     let aug_entry = AugDirEntry {
-        dir_entry: entry,
-        size,
+        dir_entry,
+        metadata,
     };
-    let key = group_key(&aug_entry);
-    let by_path = by_key_and_path.entry(key).or_insert_with(HashMap::new);
-    by_path.insert(path_str, aug_entry);
+    by_key_and_path
+        .entry(group_key(&aug_entry))
+        .or_insert_with(HashMap::new)
+        .insert(path_str, aug_entry);
     FindStats::file_of_size(size)
+}
+
+fn dir_name_to_entries(options: &Options, dir: &String) -> impl Iterator<Item = EntryPair> {
+    return WalkDir::new(dir)
+        .into_iter()
+        .filter_entry(|entry| options.is_entry_included(&entry))
+        // TODO: use metadata from the entry on Windows here
+        .map(|entry| (entry.unwrap(), None))
+        .into_iter();
 }
 
 pub fn find_files(
@@ -94,15 +114,22 @@ pub fn find_files(
     let mut find_stats = FindStats::zero();
     prog.set_draw_delta(100);
 
-    let by_key_and_paths = options
+    let dir_dent_iterators = options
         .directories
         .iter()
-        .map(|dir| {
-            let walker = WalkDir::new(dir).into_iter();
-            let entry_iter = walker.filter_entry(|entry| options.is_entry_included(&entry));
+        .map(|dir| dir_name_to_entries(options, dir));
+
+    //    let filelist_dent_iterators = options
+    //        .file_lists
+    //        .iter()
+    //        .map(|filename: &String| file_list_to_entries(options, filename));
+
+    let by_key_and_paths = dir_dent_iterators
+        //        .chain(filelist_dent_iterators)
+        .map(|entry_iter| {
             let mut by_key_and_path: KeyToStringToDentMap = HashMap::new();
             for er in entry_iter {
-                let pr = process_entry(options, &mut by_key_and_path, er.unwrap());
+                let pr = process_entry(options, &mut by_key_and_path, er);
                 find_stats.accumulate(&pr);
                 prog.set_message(
                     format!(
