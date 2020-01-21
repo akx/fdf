@@ -10,13 +10,16 @@ extern crate walkdir;
 
 mod fdf;
 
+use crate::fdf::find::KeyToStringToDentMap;
 use fdf::cli::parse_args;
 use fdf::find::{AugDirEntry, GroupKey, KeyToDentsMap};
-use fdf::options::Options;
+use fdf::options::{Options, ReportOption};
 use fdf::output::*;
 use humansize::{file_size_opts, FileSize};
 use indicatif::{ProgressBar, ProgressStyle};
 use rayon::prelude::*;
+use std::fs::File;
+use std::io::{stdout, Write};
 use std::time::{Duration, Instant};
 
 fn process_key_group(key: &GroupKey, dents: &[AugDirEntry], options: &Options) -> KeyGroupResult {
@@ -37,18 +40,24 @@ fn process_key_group(key: &GroupKey, dents: &[AugDirEntry], options: &Options) -
     }
 }
 
-fn print_key_group_result(kgr: &KeyGroupResult) {
+fn print_key_group_result(stream: &mut dyn Write, kgr: &KeyGroupResult) {
     if !kgr.hash_groups.iter().any(|hg| hg.files.len() > 1) {
         return;
     }
     let size = kgr.size.file_size(file_size_opts::CONVENTIONAL).unwrap();
-    println!("### {}/{} ({} files)", size, kgr.identifier, kgr.n_files);
+
+    writeln!(
+        stream,
+        "### {}/{} ({} files)",
+        size, kgr.identifier, kgr.n_files
+    )
+    .unwrap();
     for hg in &kgr.hash_groups {
         if hg.files.len() > 1 {
             for path in &hg.files {
-                println!("{} {}", hg.hash, path);
+                writeln!(stream, "{} {}", hg.hash, path).unwrap();
             }
-            println!();
+            writeln!(stream).unwrap();
         }
     }
 }
@@ -116,14 +125,40 @@ fn print_duplicate_info(key_group_results: &Vec<KeyGroupResult>) {
     }
 }
 
+fn print_file_list(writer: &mut dyn Write, ksdmap: &KeyToStringToDentMap) {
+    for (_key, path_to_dent_map) in ksdmap.iter() {
+        for key in path_to_dent_map.keys() {
+            writeln!(writer, "{}", key).unwrap();
+        }
+    }
+}
+
+fn maybe_write_report<W>(report_option: &ReportOption, writer: W) -> ()
+where
+    W: Fn(&mut dyn Write) -> (),
+{
+    let stream_box_opt: Option<Box<dyn Write>> = match report_option {
+        ReportOption::None => None,
+        ReportOption::Stdout => Some(Box::new(stdout())),
+        ReportOption::File(name) => Some(Box::new(File::create(name).unwrap())),
+    };
+    match stream_box_opt {
+        None => {}
+        Some(mut stream_box) => {
+            writer(&mut *stream_box);
+        }
+    };
+}
+
 fn main() {
     let mut options = parse_args().unwrap();
-    if !(options.report_json || options.report_human) {
-        eprintln!("No output arguments set; assuming human output desired.");
-        options.report_human = true;
+    if options.report_json == ReportOption::None && options.report_human == ReportOption::None {
+        eprintln!("No output arguments set; assuming human output to stdout desired.");
+        options.report_human = ReportOption::Stdout;
     }
     let start_time = Instant::now();
-    let (find_stats, hash_stats, by_key) = fdf::find::find_files(&options);
+    let (find_stats, hash_stats, by_key, precull_files) =
+        fdf::find::find_files(&options, options.report_file_list != ReportOption::None);
     eprintln!(
         "Found {} files in {} directories ({} groups before culling) in {:.2} s, {}.",
         find_stats.n_files,
@@ -135,6 +170,11 @@ fn main() {
             .file_size(file_size_opts::CONVENTIONAL)
             .unwrap()
     );
+    if precull_files.is_some() {
+        maybe_write_report(&options.report_file_list, |stream| {
+            print_file_list(stream, precull_files.as_ref().unwrap());
+        });
+    }
     eprintln!(
         "Hashing {} groups, {} files, {}.",
         hash_stats.n_groups,
@@ -148,19 +188,19 @@ fn main() {
     let key_group_results = do_hash(&mut options, by_key);
     print_stage_duration("Hashing", &hash_stats, hash_start_time.elapsed());
     let output_start_time = Instant::now();
-    if options.report_human {
+    maybe_write_report(&options.report_human, |stream| {
         for kgr in key_group_results.iter() {
-            print_key_group_result(&kgr);
+            print_key_group_result(stream, &kgr);
         }
-    }
-    if options.report_json {
+    });
+    maybe_write_report(&options.report_json, |stream| {
         let gr = GrandResult {
             find_stats: &find_stats,
             hash_stats: &hash_stats,
             key_groups: &key_group_results,
         };
-        println!("{}", serde_json::to_string(&gr).unwrap());
-    }
+        serde_json::to_writer_pretty(stream, &gr).unwrap();
+    });
     print_duplicate_info(&key_group_results);
     print_stage_duration("Output", &hash_stats, output_start_time.elapsed());
     print_stage_duration("Finished", &hash_stats, start_time.elapsed());

@@ -1,8 +1,21 @@
-use super::options::{HashAlgorithm, Options};
-use clap::{App, Arg};
+use super::options::{HashAlgorithm, Options, ReportOption};
+use clap::{App, Arg, ArgMatches};
 use regex::RegexSet;
 use std::error::Error;
 use std::result::Result;
+
+fn read_report_option(args: &ArgMatches, name: &str) -> ReportOption {
+    return if args.is_present(name) {
+        let val = value_t!(args, name, String).unwrap_or_else(|_| String::new());
+        if val.len() == 0 {
+            ReportOption::Stdout
+        } else {
+            ReportOption::File(val)
+        }
+    } else {
+        ReportOption::None
+    };
+}
 
 pub fn parse_args() -> Result<Options, Box<dyn Error>> {
     let args = App::new("fdf")
@@ -42,16 +55,27 @@ pub fn parse_args() -> Result<Options, Box<dyn Error>> {
                 .default_value("Sha256"),
         )
         .arg(
-            Arg::with_name("json")
-                .long("json")
+            Arg::with_name("report-json")
+                .long("output-json")
+                .min_values(0)
+                .max_values(1)
                 .short("j")
-                .help("Output JSON report"),
+                .help("Output JSON report (to stdout or the given filename)"),
         )
         .arg(
-            Arg::with_name("human")
-                .long("human")
+            Arg::with_name("report-human")
+                .long("output-human")
+                .min_values(0)
+                .max_values(1)
                 .short("h")
-                .help("Output human-readable report"),
+                .help("Output human-readable report (to stdout or the given filename)"),
+        )
+        .arg(
+            Arg::with_name("report-file-list")
+                .long("output-file-list")
+                .min_values(0)
+                .max_values(1)
+                .help("Output list of files matched (to stdout or the given filename)"),
         )
         .arg(
             Arg::with_name("dir-exclude-re")
@@ -112,7 +136,8 @@ pub fn parse_args() -> Result<Options, Box<dyn Error>> {
         verbosity: args.occurrences_of("v"),
         hash_bytes: value_t!(args, "hash-bytes", u64).unwrap(),
         hash_algorithm: value_t!(args, "hash-algorithm", HashAlgorithm).unwrap(),
-        report_human: args.is_present("human"),
-        report_json: args.is_present("json"),
+        report_human: read_report_option(&args, "report-human"),
+        report_json: read_report_option(&args, "report-json"),
+        report_file_list: read_report_option(&args, "report-file-list"),
     })
 }
