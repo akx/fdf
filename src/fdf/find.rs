@@ -19,7 +19,7 @@ impl AugDirEntry {
     }
 }
 
-#[derive(Eq, PartialEq, Hash, Debug)]
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct GroupKey {
     pub size: u64,
     pub extension: Atom,
@@ -35,7 +35,7 @@ fn group_key(dent: &AugDirEntry) -> GroupKey {
 }
 
 type StringToDentMap = HashMap<String, AugDirEntry>;
-type KeyToStringToDentMap = HashMap<GroupKey, StringToDentMap>;
+pub type KeyToStringToDentMap = HashMap<GroupKey, StringToDentMap>;
 pub type KeyToDentsMap = HashMap<GroupKey, Vec<AugDirEntry>>;
 
 fn calculate_hash_stats(by_key: &KeyToDentsMap) -> HashStats {
@@ -54,7 +54,15 @@ fn calculate_hash_stats(by_key: &KeyToDentsMap) -> HashStats {
     }
 }
 
-pub fn find_files(options: &Options) -> (FindStats, HashStats, KeyToDentsMap) {
+pub fn find_files(
+    options: &Options,
+    return_precull: bool,
+) -> (
+    FindStats,
+    HashStats,
+    KeyToDentsMap,
+    Option<KeyToStringToDentMap>,
+) {
     let prog = ProgressBar::new_spinner();
     let mut n_dirs: u64 = 0;
     let mut n_files: u64 = 0;
@@ -126,13 +134,21 @@ pub fn find_files(options: &Options) -> (FindStats, HashStats, KeyToDentsMap) {
         n_files,
         n_precull_groups: by_key_and_path.len() as u64,
     };
-    for (key, ent_map) in by_key_and_path {
+    for (key, ent_map) in &by_key_and_path {
         if ent_map.len() > 1 {
-            by_key.insert(key, ent_map.values().cloned().collect());
+            by_key.insert(key.clone(), ent_map.values().cloned().collect());
         }
     }
     prog.set_message("Calculating statistics...");
     let stats = calculate_hash_stats(&by_key);
     prog.finish_and_clear();
-    (find_stats, stats, by_key)
+    (
+        find_stats,
+        stats,
+        by_key,
+        match return_precull {
+            true => Some(by_key_and_path),
+            false => None,
+        },
+    )
 }

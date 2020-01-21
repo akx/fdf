@@ -2,12 +2,21 @@ use regex::RegexSet;
 use walkdir::DirEntry;
 
 arg_enum! {
+    #[derive(Debug)]
     pub enum HashAlgorithm {
         Sha256,
         Murmur3,
     }
 }
 
+#[derive(PartialEq, Eq, Debug, Hash)]
+pub enum ReportOption {
+    None,
+    Stdout,
+    File(String),
+}
+
+#[derive(Debug)]
 pub struct Options {
     pub directories: Vec<String>,
     pub file_include_regexes: RegexSet,
@@ -17,8 +26,9 @@ pub struct Options {
     pub verbosity: u64,
     pub hash_bytes: u64,
     pub hash_algorithm: HashAlgorithm,
-    pub report_json: bool,
-    pub report_human: bool,
+    pub report_json: ReportOption,
+    pub report_human: ReportOption,
+    pub report_file_list: ReportOption,
 }
 
 impl Options {
