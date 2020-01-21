@@ -54,6 +54,33 @@ fn calculate_hash_stats(by_key: &KeyToDentsMap) -> HashStats {
     }
 }
 
+fn process_entry(
+    options: &Options,
+    by_key_and_path: &mut KeyToStringToDentMap,
+    entry: DirEntry,
+) -> FindStats {
+    // TODO: Process symlinks gracefully
+    if entry.file_type().is_dir() || entry.file_type().is_symlink() {
+        return FindStats::zero();
+    }
+    let size = entry.metadata().unwrap().len();
+    if size == 0 {
+        return FindStats::zero();
+    }
+    if options.verbosity >= 3 {
+        println!("{}", entry.path().display());
+    }
+    let path_str = entry.path().to_str().unwrap().to_string();
+    let aug_entry = AugDirEntry {
+        dir_entry: entry,
+        size,
+    };
+    let key = group_key(&aug_entry);
+    let by_path = by_key_and_path.entry(key).or_insert_with(HashMap::new);
+    by_path.insert(path_str, aug_entry);
+    FindStats::file_of_size(size)
+}
+
 pub fn find_files(
     options: &Options,
     return_precull: bool,
@@ -64,49 +91,28 @@ pub fn find_files(
     Option<KeyToStringToDentMap>,
 ) {
     let prog = ProgressBar::new_spinner();
-    let mut n_dirs: u64 = 0;
-    let mut n_files: u64 = 0;
-    let mut n_bytes: u64 = 0;
+    let mut find_stats = FindStats::zero();
     prog.set_draw_delta(100);
+
     let by_key_and_paths = options
         .directories
         .iter()
         .map(|dir| {
-            let mut by_key_and_path: KeyToStringToDentMap = HashMap::new();
             let walker = WalkDir::new(dir).into_iter();
-            for er in walker.filter_entry(|entry| options.is_entry_included(&entry)) {
-                let entry = er.unwrap();
-                if entry.file_type().is_dir() {
-                    n_dirs += 1;
-                    continue;
-                }
-                // TODO: Process symlinks gracefully
-                if entry.file_type().is_symlink() {
-                    continue;
-                }
-                let size = entry.metadata().unwrap().len();
-                if size == 0 {
-                    continue;
-                }
-                n_files += 1;
-                n_bytes += size;
-                if options.verbosity >= 3 {
-                    println!("{}", entry.path().display());
-                }
-                let path_str = entry.path().to_str().unwrap().to_string();
-                let aug_entry = AugDirEntry {
-                    dir_entry: entry,
-                    size,
-                };
-                let key = group_key(&aug_entry);
-                let by_path = by_key_and_path.entry(key).or_insert_with(HashMap::new);
-                by_path.insert(path_str, aug_entry);
+            let entry_iter = walker.filter_entry(|entry| options.is_entry_included(&entry));
+            let mut by_key_and_path: KeyToStringToDentMap = HashMap::new();
+            for er in entry_iter {
+                let pr = process_entry(options, &mut by_key_and_path, er.unwrap());
+                find_stats.accumulate(&pr);
                 prog.set_message(
                     format!(
                         "{} dirs, {} files, {}...",
-                        n_dirs,
-                        n_files,
-                        n_bytes.file_size(file_size_opts::CONVENTIONAL).unwrap()
+                        find_stats.n_dirs,
+                        find_stats.n_files,
+                        find_stats
+                            .n_bytes
+                            .file_size(file_size_opts::CONVENTIONAL)
+                            .unwrap()
                     )
                     .as_str(),
                 );
@@ -128,12 +134,7 @@ pub fn find_files(
                 accmap
             });
     let mut by_key: KeyToDentsMap = HashMap::new();
-    let find_stats = FindStats {
-        n_bytes,
-        n_dirs,
-        n_files,
-        n_precull_groups: by_key_and_path.len() as u64,
-    };
+    find_stats.n_precull_groups = by_key_and_path.len() as u64;
     for (key, ent_map) in &by_key_and_path {
         if ent_map.len() > 1 {
             by_key.insert(key.clone(), ent_map.values().cloned().collect());
