@@ -7,7 +7,7 @@ use std::fs::Metadata;
 use std::rc::Rc;
 use crate::fdf::entry_gen::{EntryPairGenerator, EntryPair};
 
-struct FileListEntryPairGenerator {
+pub struct FileListEntryPairGenerator {
     lines: Lines<BufReader<fs::File>>,
 }
 
@@ -57,13 +57,4 @@ fn filename_to_entry_pair(options: &Options, filename: &String) -> Option<EntryP
         }
         Err(err) => None,
     };
-}
-
-pub fn file_list_to_entries(
-    options: &Options,
-    file_list_name: &String,
-) -> impl Iterator<Item=EntryPair> {
-    return BufReader::new(fs::File::open(file_list_name).unwrap())
-        .lines()
-        .filter_map(|filename: &String| filename_to_entry_pair(options, filename));
 }

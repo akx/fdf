@@ -8,6 +8,9 @@ use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use string_cache::DefaultAtom as Atom;
 use walkdir::{DirEntry, WalkDir};
+use crate::fdf::entry_gen::EntryPair;
+use crate::fdf::walkdir_entry_gen::WalkDirEntryPairGenerator;
+use crate::fdf::filelist_entry_gen::FileListEntryPairGenerator;
 
 #[derive(Clone, Debug)]
 pub struct AugDirEntry {
@@ -48,8 +51,8 @@ fn calculate_hash_stats(by_key: &KeyToDentsMap) -> HashStats {
                 n_files + dents.len() as u64,
                 total_size
                     + dents
-                        .iter()
-                        .fold(0u64, |acc, dent| acc + dent.metadata.len()),
+                    .iter()
+                    .fold(0u64, |acc, dent| acc + dent.metadata.len()),
             )
         });
     HashStats {
@@ -92,15 +95,6 @@ fn process_entry(
     FindStats::file_of_size(size)
 }
 
-fn dir_name_to_entries(options: &Options, dir: &String) -> impl Iterator<Item = EntryPair> {
-    return WalkDir::new(dir)
-        .into_iter()
-        .filter_entry(|entry| options.is_entry_included(&entry))
-        // TODO: use metadata from the entry on Windows here
-        .map(|entry| (entry.unwrap(), None))
-        .into_iter();
-}
-
 pub fn find_files(
     options: &Options,
     return_precull: bool,
@@ -117,15 +111,16 @@ pub fn find_files(
     let dir_dent_iterators = options
         .directories
         .iter()
-        .map(|dir| dir_name_to_entries(options, dir));
+        .map(|dir| WalkDirEntryPairGenerator::new(dir));
 
-    //    let filelist_dent_iterators = options
-    //        .file_lists
-    //        .iter()
-    //        .map(|filename: &String| file_list_to_entries(options, filename));
+    let filelist_dent_iterators = options
+        .file_lists
+        .iter()
+        .map(|filename: &String| FileListEntryPairGenerator::new(filename));
+    let iterators = dir_dent_iterators
+        .chain(filelist_dent_iterators);
 
-    let by_key_and_paths = dir_dent_iterators
-        //        .chain(filelist_dent_iterators)
+    let by_key_and_paths = iterators
         .map(|entry_iter| {
             let mut by_key_and_path: KeyToStringToDentMap = HashMap::new();
             for er in entry_iter {
@@ -141,7 +136,7 @@ pub fn find_files(
                             .file_size(file_size_opts::CONVENTIONAL)
                             .unwrap()
                     )
-                    .as_str(),
+                        .as_str(),
                 );
                 prog.inc(1);
             }
