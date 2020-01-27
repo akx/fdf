@@ -25,11 +25,9 @@ fn hash_file<'a>(
             hash = hex::encode(sha256.result());
         }
         HashAlgorithm::Murmur3 => {
-            let mut murmur3_buf: [u8; 16] = [0; 16];
             let seed: u32 = (key.size % (std::u32::MAX as u64)) as u32;
-            // TODO: this can panic!() if reader.read() fails :-(
-            murmur3_x64_128(&mut reader, seed, &mut murmur3_buf);
-            hash = format!("m{}", hex::encode(murmur3_buf));
+            let hash_u: u128 = murmur3_x64_128(&mut reader, seed)?;
+            hash = format!("m{:x}", hash_u);
         }
     }
 
