@@ -75,7 +75,13 @@ pub fn find_files(
             let mut by_key_and_path: KeyToStringToDentMap = HashMap::new();
             let walker = WalkDir::new(dir).into_iter();
             for er in walker.filter_entry(|entry| options.is_entry_included(&entry)) {
-                let entry = er.unwrap();
+                let entry = match er {
+                    Ok(entry) => entry,
+                    Err(err) => {
+                        eprintln!("[!] {}", err);
+                        continue;
+                    },
+                };
                 if entry.file_type().is_dir() {
                     n_dirs += 1;
                     continue;
