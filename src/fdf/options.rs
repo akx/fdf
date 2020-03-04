@@ -16,6 +16,12 @@ pub enum ReportOption {
     File(String),
 }
 
+#[derive(PartialEq, Eq, Debug, Hash)]
+pub enum ExtensionGroupingOption {
+    FullName,
+    SingleGroup,
+}
+
 #[derive(Debug)]
 pub struct Options {
     pub directories: Vec<String>,
@@ -29,6 +35,7 @@ pub struct Options {
     pub report_json: ReportOption,
     pub report_human: ReportOption,
     pub report_file_list: ReportOption,
+    pub extension_grouping: ExtensionGroupingOption,
 }
 
 impl Options {

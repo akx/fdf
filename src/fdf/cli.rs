@@ -3,6 +3,7 @@ use clap::{App, Arg, ArgMatches};
 use regex::RegexSet;
 use std::error::Error;
 use std::result::Result;
+use crate::fdf::options::ExtensionGroupingOption;
 
 fn read_report_option(args: &ArgMatches, name: &str) -> ReportOption {
     return if args.is_present(name) {
@@ -53,6 +54,13 @@ pub fn parse_args() -> Result<Options, Box<dyn Error>> {
                 .help("Select a hash algorithm. Murmur3 is faster, but not cryptographically safe.")
                 .possible_values(&HashAlgorithm::variants())
                 .default_value("Sha256"),
+        )
+        .arg(
+            Arg::with_name("extensionless-full-name")
+                .long("extensionless-full-name")
+                .help("Group extensionless files by their full basename (instead of a single group)")
+                .required(false)
+                .takes_value(false)
         )
         .arg(
             Arg::with_name("report-json")
@@ -139,5 +147,9 @@ pub fn parse_args() -> Result<Options, Box<dyn Error>> {
         report_human: read_report_option(&args, "report-human"),
         report_json: read_report_option(&args, "report-json"),
         report_file_list: read_report_option(&args, "report-file-list"),
+        extension_grouping: match args.is_present("extensionless-full-name") {
+            true => ExtensionGroupingOption::FullName,
+            false => ExtensionGroupingOption::SingleGroup,
+        },
     })
 }

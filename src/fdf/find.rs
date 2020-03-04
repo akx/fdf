@@ -6,6 +6,7 @@ use indicatif::ProgressBar;
 use std::path::Path;
 use string_cache::DefaultAtom as Atom;
 use walkdir::{DirEntry, WalkDir};
+use crate::fdf::options::ExtensionGroupingOption;
 
 #[derive(Clone, Debug)]
 pub struct AugDirEntry {
@@ -25,12 +26,15 @@ pub struct GroupKey {
     pub extension: Atom,
 }
 
-fn group_key(dent: &AugDirEntry) -> GroupKey {
+fn group_key(options: &Options, dent: &AugDirEntry) -> GroupKey {
     let size = dent.size;
-    let extension = Atom::from(match dent.path().extension() {
-        Some(ps) => ps.to_str().unwrap(),
-        None => dent.path().file_name().unwrap().to_str().unwrap(),
-    });
+    let extension = match dent.path().extension() {
+        Some(ps) => Atom::from(ps.to_str().unwrap()),
+        None => match options.extension_grouping {
+            ExtensionGroupingOption::FullName => Atom::from(dent.path().file_name().unwrap().to_str().unwrap()),
+            ExtensionGroupingOption::SingleGroup => Atom::from("<no extension>"),
+        },
+    };
     GroupKey { size, extension }
 }
 
@@ -104,7 +108,7 @@ pub fn find_files(
                     dir_entry: entry,
                     size,
                 };
-                let key = group_key(&aug_entry);
+                let key = group_key(&options, &aug_entry);
                 let by_path = by_key_and_path.entry(key).or_insert_with(HashMap::new);
                 by_path.insert(path_str, aug_entry);
                 prog.set_message(
