@@ -1,25 +1,24 @@
-use super::options::{HashAlgorithm, Options, ReportOption};
+use super::options::{ExtensionGroupingOption, HashAlgorithm, Options, ReportOption};
 use clap::{App, Arg, ArgMatches};
-use regex::RegexSet;
+use regex;
 use std::error::Error;
 use std::result::Result;
-use crate::fdf::options::ExtensionGroupingOption;
 
 fn read_report_option(args: &ArgMatches, name: &str) -> ReportOption {
-    return if args.is_present(name) {
+    if args.is_present(name) {
         let val = value_t!(args, name, String).unwrap_or_else(|_| String::new());
-        if val.len() == 0 || val == "-" {
+        if val.is_empty() || val == "-" {
             ReportOption::Stdout
         } else {
             ReportOption::File(val)
         }
     } else {
         ReportOption::None
-    };
+    }
 }
 
-pub fn parse_args() -> Result<Options, Box<dyn Error>> {
-    let args = App::new("fdf")
+fn build_app<'a>() -> App<'a, 'a> {
+    App::new("fdf")
         .version(crate_version!())
         .author(crate_authors!())
         .about("File duplicate finder")
@@ -58,9 +57,11 @@ pub fn parse_args() -> Result<Options, Box<dyn Error>> {
         .arg(
             Arg::with_name("extensionless-full-name")
                 .long("extensionless-full-name")
-                .help("Group extensionless files by their full basename (instead of a single group)")
+                .help(
+                    "Group extensionless files by their full basename (instead of a single group)",
+                )
                 .required(false)
-                .takes_value(false)
+                .takes_value(false),
         )
         .arg(
             Arg::with_name("report-json")
@@ -126,30 +127,30 @@ pub fn parse_args() -> Result<Options, Box<dyn Error>> {
                 .required(false)
                 .help("Regexp to include files with"),
         )
-        .get_matches();
+}
+
+fn parse_regex_set(args: &ArgMatches, name: &str) -> Result<regex::RegexSet, regex::Error> {
+    regex::RegexSet::new(&values_t!(args, name, String).unwrap_or_else(|_| Vec::new()))
+}
+
+pub fn parse_args() -> Result<Options, Box<dyn Error>> {
+    let args = build_app().get_matches();
     Ok(Options {
         directories: values_t!(args, "directory", String)?,
-        dir_exclude_regexes: RegexSet::new(
-            &values_t!(args, "dir-exclude-re", String).unwrap_or_else(|_| Vec::new()),
-        )?,
-        dir_include_regexes: RegexSet::new(
-            &values_t!(args, "dir-include-re", String).unwrap_or_else(|_| Vec::new()),
-        )?,
-        file_exclude_regexes: RegexSet::new(
-            &values_t!(args, "file-exclude-re", String).unwrap_or_else(|_| Vec::new()),
-        )?,
-        file_include_regexes: RegexSet::new(
-            &values_t!(args, "file-include-re", String).unwrap_or_else(|_| Vec::new()),
-        )?,
+        dir_exclude_regexes: parse_regex_set(&args, "dir-exclude-re")?,
+        dir_include_regexes: parse_regex_set(&args, "dir-include-re")?,
+        file_exclude_regexes: parse_regex_set(&args, "file-exclude-re")?,
+        file_include_regexes: parse_regex_set(&args, "file-include-re")?,
         verbosity: args.occurrences_of("v"),
         hash_bytes: value_t!(args, "hash-bytes", u64).unwrap(),
         hash_algorithm: value_t!(args, "hash-algorithm", HashAlgorithm).unwrap(),
         report_human: read_report_option(&args, "report-human"),
         report_json: read_report_option(&args, "report-json"),
         report_file_list: read_report_option(&args, "report-file-list"),
-        extension_grouping: match args.is_present("extensionless-full-name") {
-            true => ExtensionGroupingOption::FullName,
-            false => ExtensionGroupingOption::SingleGroup,
+        extension_grouping: if args.is_present("extensionless-full-name") {
+            ExtensionGroupingOption::FullName
+        } else {
+            ExtensionGroupingOption::SingleGroup
         },
     })
 }

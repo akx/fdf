@@ -1,4 +1,4 @@
-use super::options::Options;
+use super::options::{ExtensionGroupingOption, Options};
 use super::output::{FindStats, HashStats};
 use hashbrown::HashMap;
 use humansize::{file_size_opts, FileSize};
@@ -6,7 +6,6 @@ use indicatif::ProgressBar;
 use std::path::Path;
 use string_cache::DefaultAtom as Atom;
 use walkdir::{DirEntry, WalkDir};
-use crate::fdf::options::ExtensionGroupingOption;
 
 #[derive(Clone, Debug)]
 pub struct AugDirEntry {
@@ -31,7 +30,9 @@ fn group_key(options: &Options, dent: &AugDirEntry) -> GroupKey {
     let extension = match dent.path().extension() {
         Some(ps) => Atom::from(ps.to_str().unwrap()),
         None => match options.extension_grouping {
-            ExtensionGroupingOption::FullName => Atom::from(dent.path().file_name().unwrap().to_str().unwrap()),
+            ExtensionGroupingOption::FullName => {
+                Atom::from(dent.path().file_name().unwrap().to_str().unwrap())
+            }
             ExtensionGroupingOption::SingleGroup => Atom::from("<no extension>"),
         },
     };
@@ -84,7 +85,7 @@ pub fn find_files(
                     Err(err) => {
                         eprintln!("[!] {}", err);
                         continue;
-                    },
+                    }
                 };
                 if entry.file_type().is_dir() {
                     n_dirs += 1;
@@ -156,9 +157,10 @@ pub fn find_files(
         find_stats,
         stats,
         by_key,
-        match return_precull {
-            true => Some(by_key_and_path),
-            false => None,
+        if return_precull {
+            Some(by_key_and_path)
+        } else {
+            None
         },
     )
 }

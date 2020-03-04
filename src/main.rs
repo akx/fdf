@@ -20,8 +20,8 @@ use indicatif::{ProgressBar, ProgressStyle};
 use rayon::prelude::*;
 use std::fs::File;
 use std::io::{stdout, Write};
-use std::time::{Duration, Instant};
 use std::process::exit;
+use std::time::{Duration, Instant};
 
 fn process_key_group(key: &GroupKey, dents: &[AugDirEntry], options: &Options) -> KeyGroupResult {
     KeyGroupResult {
@@ -101,7 +101,7 @@ fn print_stage_duration(label: &str, hash_stats: &HashStats, d: Duration) {
     );
 }
 
-fn print_duplicate_info(key_group_results: &Vec<KeyGroupResult>) {
+fn print_duplicate_info(key_group_results: &[KeyGroupResult]) {
     let mut n_duplicate_files: u64 = 0;
     let mut n_bytes_wasted: u64 = 0;
     for kgr in key_group_results.iter() {
@@ -134,7 +134,7 @@ fn print_file_list(writer: &mut dyn Write, ksdmap: &KeyToStringToDentMap) {
     }
 }
 
-fn maybe_write_report<W>(report_option: &ReportOption, writer: W) -> ()
+fn maybe_write_report<W>(report_option: &ReportOption, writer: W)
 where
     W: Fn(&mut dyn Write) -> (),
 {
