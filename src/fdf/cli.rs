@@ -8,7 +8,7 @@ use crate::fdf::options::ExtensionGroupingOption;
 fn read_report_option(args: &ArgMatches, name: &str) -> ReportOption {
     return if args.is_present(name) {
         let val = value_t!(args, name, String).unwrap_or_else(|_| String::new());
-        if val.len() == 0 {
+        if val.len() == 0 || val == "-" {
             ReportOption::Stdout
         } else {
             ReportOption::File(val)
