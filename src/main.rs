@@ -21,6 +21,7 @@ use rayon::prelude::*;
 use std::fs::File;
 use std::io::{stdout, Write};
 use std::time::{Duration, Instant};
+use std::process::exit;
 
 fn process_key_group(key: &GroupKey, dents: &[AugDirEntry], options: &Options) -> KeyGroupResult {
     KeyGroupResult {
@@ -151,7 +152,10 @@ where
 }
 
 fn main() {
-    let mut options = parse_args().unwrap();
+    let mut options = parse_args().unwrap_or_else(|err| {
+        eprintln!("{}", err);
+        exit(1);
+    });
     if options.report_json == ReportOption::None && options.report_human == ReportOption::None {
         eprintln!("No output arguments set; assuming human output to stdout desired.");
         options.report_human = ReportOption::Stdout;
