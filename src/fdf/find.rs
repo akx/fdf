@@ -28,7 +28,7 @@ pub struct GroupKey {
 fn group_key(options: &Options, dent: &AugDirEntry) -> GroupKey {
     let size = dent.size;
     let extension = match dent.path().extension() {
-        Some(ps) => Atom::from(ps.to_str().unwrap()),
+        Some(ps) => Atom::from(ps.to_str().unwrap().to_lowercase()),
         None => match options.extension_grouping {
             ExtensionGroupingOption::FullName => {
                 Atom::from(dent.path().file_name().unwrap().to_str().unwrap())
