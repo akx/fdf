@@ -18,6 +18,7 @@ use fdf::output::*;
 use humansize::{file_size_opts, FileSize};
 use indicatif::{ProgressBar, ProgressStyle};
 use rayon::prelude::*;
+use std::error::Error;
 use std::fs::File;
 use std::io::{stdout, Write};
 use std::process::exit;
@@ -41,26 +42,31 @@ fn process_key_group(key: &GroupKey, dents: &[AugDirEntry], options: &Options) -
     }
 }
 
-fn print_key_group_result(stream: &mut dyn Write, kgr: &KeyGroupResult) {
+fn print_key_group_result(
+    stream: &mut dyn Write,
+    kgr: &KeyGroupResult,
+) -> Result<(), Box<dyn Error>> {
     if !kgr.hash_groups.iter().any(|hg| hg.files.len() > 1) {
-        return;
+        return Ok(());
     }
-    let size = kgr.size.file_size(file_size_opts::CONVENTIONAL).unwrap();
+    let size = kgr.size.file_size(file_size_opts::CONVENTIONAL)?;
 
-    writeln!(
-        stream,
-        "### {}/{} ({} files)",
-        size, kgr.identifier, kgr.n_files
-    )
-    .unwrap();
     for hg in &kgr.hash_groups {
-        if hg.files.len() > 1 {
-            for path in &hg.files {
-                writeln!(stream, "{} {}", hg.hash, path).unwrap();
-            }
-            writeln!(stream).unwrap();
+        let n_files = hg.files.len();
+        if n_files <= 1 {
+            continue;
         }
+        writeln!(
+            stream,
+            "### {} / {} / {} ({} files)",
+            size, kgr.identifier, hg.hash, n_files
+        )?;
+        for path in &hg.files {
+            writeln!(stream, "{}", path)?;
+        }
+        writeln!(stream)?;
     }
+    Ok(())
 }
 
 fn do_hash(options: &mut Options, by_key: KeyToDentsMap) -> Vec<KeyGroupResult> {
@@ -194,7 +200,7 @@ fn main() {
     let output_start_time = Instant::now();
     maybe_write_report(&options.report_human, |stream| {
         for kgr in key_group_results.iter() {
-            print_key_group_result(stream, kgr);
+            print_key_group_result(stream, kgr).unwrap();
         }
     });
     maybe_write_report(&options.report_json, |stream| {
