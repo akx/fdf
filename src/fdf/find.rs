@@ -73,7 +73,7 @@ pub fn find_files(
     let mut n_files: u64 = 0;
     let mut n_bytes: u64 = 0;
     prog.set_draw_delta(100);
-    let by_key_and_paths = options
+    let by_key_and_path: KeyToStringToDentMap = options
         .directories
         .iter()
         .map(|dir| {
@@ -125,19 +125,12 @@ pub fn find_files(
             }
             by_key_and_path
         })
-        .collect::<Vec<KeyToStringToDentMap>>();
-    prog.set_draw_delta(0);
-    prog.set_message("Merging and regrouping...");
-    // merge per-directory maps into one
-    let by_key_and_path: KeyToStringToDentMap =
-        by_key_and_paths
-            .into_iter()
-            .fold(HashMap::new(), |mut accmap, map| {
-                for (key, ents) in map {
-                    accmap.entry(key).or_insert_with(HashMap::new).extend(ents);
-                }
-                accmap
-            });
+        .fold(HashMap::new(), |mut accmap, map| {
+            for (key, ents) in map {
+                accmap.entry(key).or_insert_with(HashMap::new).extend(ents);
+            }
+            accmap
+        });
     let mut by_key: KeyToDentsMap = HashMap::new();
     let find_stats = FindStats {
         n_bytes,
