@@ -2,7 +2,7 @@
 name = "fdf"
 version = "0.3.0"
 authors = ["Aarni Koskela <akx@iki.fi>"]
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 clap = "2.33.0"
