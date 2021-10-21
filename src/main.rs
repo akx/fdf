@@ -27,7 +27,7 @@ fn process_key_group(key: &GroupKey, dents: &[AugDirEntry], options: &Options) -
     KeyGroupResult {
         size: key.size,
         identifier: key.extension.to_string(),
-        hash_groups: fdf::hash::hash_key_group(&key, &dents, &options)
+        hash_groups: fdf::hash::hash_key_group(key, dents, options)
             .iter()
             .map(|(hash, dents)| HashGroupResult {
                 hash: hash.to_string(),
@@ -78,7 +78,7 @@ fn do_hash(options: &mut Options, by_key: KeyToDentsMap) -> Vec<KeyGroupResult> 
         .map(|(key, dents)| {
             prog.set_message(format!("{}/{}", key.extension, key.size).as_str());
             prog.inc(1);
-            process_key_group(key, dents, &options)
+            process_key_group(key, dents, options)
         })
         .collect();
     prog.finish();
@@ -136,7 +136,7 @@ fn print_file_list(writer: &mut dyn Write, ksdmap: &KeyToStringToDentMap) {
 
 fn maybe_write_report<W>(report_option: &ReportOption, writer: W)
 where
-    W: Fn(&mut dyn Write) -> (),
+    W: Fn(&mut dyn Write),
 {
     let stream_box_opt: Option<Box<dyn Write>> = match report_option {
         ReportOption::None => None,
@@ -194,7 +194,7 @@ fn main() {
     let output_start_time = Instant::now();
     maybe_write_report(&options.report_human, |stream| {
         for kgr in key_group_results.iter() {
-            print_key_group_result(stream, &kgr);
+            print_key_group_result(stream, kgr);
         }
     });
     maybe_write_report(&options.report_json, |stream| {

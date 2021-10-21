@@ -15,7 +15,7 @@ pub struct AugDirEntry {
 
 impl AugDirEntry {
     pub fn path(&self) -> &Path {
-        &self.dir_entry.path()
+        self.dir_entry.path()
     }
 }
 
@@ -79,7 +79,7 @@ pub fn find_files(
         .map(|dir| {
             let mut by_key_and_path: KeyToStringToDentMap = HashMap::new();
             let walker = WalkDir::new(dir).into_iter();
-            for er in walker.filter_entry(|entry| options.is_entry_included(&entry)) {
+            for er in walker.filter_entry(|entry| options.is_entry_included(entry)) {
                 let entry = match er {
                     Ok(entry) => entry,
                     Err(err) => {
@@ -109,7 +109,7 @@ pub fn find_files(
                     dir_entry: entry,
                     size,
                 };
-                let key = group_key(&options, &aug_entry);
+                let key = group_key(options, &aug_entry);
                 let by_path = by_key_and_path.entry(key).or_insert_with(HashMap::new);
                 by_path.insert(path_str, aug_entry);
                 prog.set_message(

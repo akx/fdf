@@ -53,10 +53,8 @@ pub fn hash_key_group<'a>(
         })
         .collect();
     let mut hm: HashMap<String, Vec<&AugDirEntry>> = HashMap::new();
-    for res in hashes {
-        if let Ok((dent, hash)) = res {
-            hm.entry(hash).or_insert_with(Vec::new).push(dent)
-        }
+    for (dent, hash) in hashes.into_iter().flatten() {
+        hm.entry(hash).or_insert_with(Vec::new).push(dent)
     }
     hm
 }
