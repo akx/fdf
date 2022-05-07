@@ -1,6 +1,6 @@
+use std::collections::HashMap;
 use super::options::{ExtensionGroupingOption, Options};
 use super::output::{FindStats, HashStats};
-use hashbrown::HashMap;
 use humansize::{file_size_opts, FileSize};
 use indicatif::ProgressBar;
 use std::path::Path;

@@ -6,7 +6,6 @@ edition = "2021"
 
 [dependencies]
 clap = "2.33.0"
-hashbrown = { version = "0.7.0", features = ["rayon"] }
 hex = "0.4.1"
 humansize = "1.1.0"
 indicatif = "0.14.0"
