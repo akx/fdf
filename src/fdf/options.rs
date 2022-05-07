@@ -4,8 +4,9 @@ use walkdir::DirEntry;
 arg_enum! {
     #[derive(Debug)]
     pub enum HashAlgorithm {
+        Blake3,
         Sha256,
-        Murmur3,
+        Xxh64,
     }
 }
 

@@ -1,12 +1,31 @@
 use super::find::{AugDirEntry, GroupKey};
 use super::options::{HashAlgorithm, Options};
-use murmur3::murmur3_x64_128;
 use rayon::prelude::*;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::error::Error;
 use std::fs::File;
-use std::io::{copy, BufReader, Read};
+use std::hash::Hasher;
+use std::io;
+use std::io::{copy, BufReader, Read, Write};
+use twox_hash::XxHash64;
+
+// via https://stackoverflow.com/questions/48533445/proper-way-to-hash-a-reader-in-rust
+struct HashWriter<T: Hasher>(T);
+impl<T: Hasher> Write for HashWriter<T> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.0.write(buf);
+        Ok(buf.len())
+    }
+
+    fn write_all(&mut self, buf: &[u8]) -> io::Result<()> {
+        self.write(buf).map(|_| ())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
 
 fn hash_file<'a>(
     key: &'a GroupKey,
@@ -18,16 +37,26 @@ fn hash_file<'a>(
     let mut reader = BufReader::with_capacity(buf_cap, f);
     let hash: String;
     match options.hash_algorithm {
+        HashAlgorithm::Blake3 => {
+            let mut b3 = blake3::Hasher::new();
+            let n = copy(&mut reader, &mut b3)?;
+            assert!(n <= options.hash_bytes);
+            hash = format!("blake3-{}", hex::encode(b3.finalize()));
+        }
         HashAlgorithm::Sha256 => {
             let mut sha256 = Sha256::new();
             let n = copy(&mut reader, &mut sha256)?;
             assert!(n <= options.hash_bytes);
-            hash = hex::encode(sha256.finalize());
+            hash = format!("sha256-{}", hex::encode(sha256.finalize()));
         }
-        HashAlgorithm::Murmur3 => {
-            let seed: u32 = (key.size % (std::u32::MAX as u64)) as u32;
-            let hash_u: u128 = murmur3_x64_128(&mut reader, seed)?;
-            hash = format!("m{:x}", hash_u);
+        HashAlgorithm::Xxh64 => {
+            let seed: u64 = key.size % (std::u32::MAX as u64);
+            let hasher = XxHash64::with_seed(seed);
+            let mut hw = HashWriter(hasher);
+            let n = copy(&mut reader, &mut hw)?;
+            assert!(n <= options.hash_bytes);
+            let hash_u = hw.0.finish();
+            hash = format!("xxh64-{:x}-{:x}", key.size, hash_u);
         }
     }
 
