@@ -22,7 +22,7 @@ fn hash_file<'a>(
             let mut sha256 = Sha256::new();
             let n = copy(&mut reader, &mut sha256)?;
             assert!(n <= options.hash_bytes);
-            hash = hex::encode(sha256.result());
+            hash = hex::encode(sha256.finalize());
         }
         HashAlgorithm::Murmur3 => {
             let seed: u32 = (key.size % (std::u32::MAX as u64)) as u32;

@@ -112,15 +112,8 @@ pub fn find_files(
                 let key = group_key(options, &aug_entry);
                 let by_path = by_key_and_path.entry(key).or_insert_with(HashMap::new);
                 by_path.insert(path_str, aug_entry);
-                prog.set_message(
-                    format!(
-                        "{} dirs, {} files, {}...",
-                        n_dirs,
-                        n_files,
-                        n_bytes.file_size(file_size_opts::CONVENTIONAL).unwrap()
-                    )
-                    .as_str(),
-                );
+                let size = n_bytes.file_size(file_size_opts::CONVENTIONAL).unwrap();
+                prog.set_message(format!("{} dirs, {} files, {}...", n_dirs, n_files, size));
                 prog.inc(1);
             }
             by_key_and_path

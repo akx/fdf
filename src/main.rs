@@ -82,7 +82,7 @@ fn do_hash(options: &mut Options, by_key: KeyToDentsMap) -> Vec<KeyGroupResult> 
     let key_group_results: Vec<KeyGroupResult> = sorted_pairs
         .par_iter()
         .map(|(key, dents)| {
-            prog.set_message(format!("{}/{}", key.extension, key.size).as_str());
+            prog.set_message(format!("{}/{}", key.extension, key.size));
             prog.inc(1);
             process_key_group(key, dents, options)
         })
