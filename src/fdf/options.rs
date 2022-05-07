@@ -37,6 +37,8 @@ pub struct Options {
     pub report_human: ReportOption,
     pub report_file_list: ReportOption,
     pub extension_grouping: ExtensionGroupingOption,
+    pub min_size: u64,
+    pub max_size: u64,
 }
 
 impl Options {

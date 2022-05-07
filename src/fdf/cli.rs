@@ -1,7 +1,7 @@
 use super::options::{ExtensionGroupingOption, HashAlgorithm, Options, ReportOption};
+use super::parse_size::parse_size_string;
 use clap::{App, Arg, ArgMatches};
 use regex;
-use std::error::Error;
 use std::result::Result;
 
 fn read_report_option(args: &ArgMatches, name: &str) -> ReportOption {
@@ -43,7 +43,7 @@ fn build_app<'a>() -> App<'a, 'a> {
                 .short("b")
                 .takes_value(true)
                 .help("Hash N first bytes only")
-                .default_value("1000000000")
+                .default_value("18446744073709551615")
                 .hide_default_value(true),
         )
         .arg(
@@ -127,13 +127,35 @@ fn build_app<'a>() -> App<'a, 'a> {
                 .required(false)
                 .help("Regexp to include files with"),
         )
+        .arg(
+            Arg::with_name("min-size")
+                .long("min-size")
+                .takes_value(true)
+                .required(false)
+                .help("Minimum file size to consider")
+                .default_value("0")
+                .hide_default_value(true),
+        )
+        .arg(
+            Arg::with_name("max-size")
+                .long("max-size")
+                .takes_value(true)
+                .required(false)
+                .help("Maximum file size to consider")
+                .default_value("18446744073709551615")
+                .hide_default_value(true),
+        )
 }
 
 fn parse_regex_set(args: &ArgMatches, name: &str) -> Result<regex::RegexSet, regex::Error> {
     regex::RegexSet::new(&values_t!(args, name, String).unwrap_or_else(|_| Vec::new()))
 }
 
-pub fn parse_args() -> Result<Options, Box<dyn Error>> {
+fn parse_size(args: &ArgMatches, name: &str) -> anyhow::Result<u64> {
+    parse_size_string(&value_t!(args, name, String)?)
+}
+
+pub fn parse_args() -> anyhow::Result<Options> {
     let args = build_app().get_matches();
     Ok(Options {
         directories: values_t!(args, "directory", String)?,
@@ -142,7 +164,7 @@ pub fn parse_args() -> Result<Options, Box<dyn Error>> {
         file_exclude_regexes: parse_regex_set(&args, "file-exclude-re")?,
         file_include_regexes: parse_regex_set(&args, "file-include-re")?,
         verbosity: args.occurrences_of("v"),
-        hash_bytes: value_t!(args, "hash-bytes", u64).unwrap(),
+        hash_bytes: parse_size(&args, "hash-bytes").unwrap(),
         hash_algorithm: value_t!(args, "hash-algorithm", HashAlgorithm).unwrap(),
         report_human: read_report_option(&args, "report-human"),
         report_json: read_report_option(&args, "report-json"),
@@ -152,5 +174,7 @@ pub fn parse_args() -> Result<Options, Box<dyn Error>> {
         } else {
             ExtensionGroupingOption::SingleGroup
         },
+        min_size: parse_size(&args, "min-size")?,
+        max_size: parse_size(&args, "max-size")?,
     })
 }

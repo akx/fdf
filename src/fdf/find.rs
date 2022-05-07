@@ -96,7 +96,7 @@ pub fn find_files(
                     continue;
                 }
                 let size = entry.metadata().unwrap().len();
-                if size == 0 {
+                if size == 0 || size < options.min_size || size > options.max_size {
                     continue;
                 }
                 n_files += 1;
