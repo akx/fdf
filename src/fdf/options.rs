@@ -40,20 +40,20 @@ pub struct Options {
 
 impl Options {
     pub fn is_file_included(&self, path_str: &str) -> bool {
-        if self.file_exclude_regexes.len() > 0 && self.file_exclude_regexes.is_match(path_str) {
+        if !self.file_exclude_regexes.is_empty() && self.file_exclude_regexes.is_match(path_str) {
             return false;
         }
-        if self.file_include_regexes.len() > 0 && !self.file_include_regexes.is_match(path_str) {
+        if !self.file_include_regexes.is_empty() && !self.file_include_regexes.is_match(path_str) {
             return false;
         }
         true
     }
 
     pub fn is_dir_included(&self, path_str: &str) -> bool {
-        if self.dir_exclude_regexes.len() > 0 && self.dir_exclude_regexes.is_match(path_str) {
+        if !self.dir_exclude_regexes.is_empty() && self.dir_exclude_regexes.is_match(path_str) {
             return false;
         }
-        if self.dir_include_regexes.len() > 0 && !self.dir_include_regexes.is_match(path_str) {
+        if !self.dir_include_regexes.is_empty() && !self.dir_include_regexes.is_match(path_str) {
             return false;
         }
         true
