@@ -1,9 +1,9 @@
-use std::collections::HashMap;
 use super::find::{AugDirEntry, GroupKey};
 use super::options::{HashAlgorithm, Options};
 use murmur3::murmur3_x64_128;
 use rayon::prelude::*;
 use sha2::{Digest, Sha256};
+use std::collections::HashMap;
 use std::error::Error;
 use std::fs::File;
 use std::io::{copy, BufReader, Read};

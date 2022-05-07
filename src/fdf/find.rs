@@ -1,8 +1,8 @@
-use std::collections::HashMap;
 use super::options::{ExtensionGroupingOption, Options};
 use super::output::{FindStats, HashStats};
 use humansize::{file_size_opts, FileSize};
 use indicatif::ProgressBar;
+use std::collections::HashMap;
 use std::path::Path;
 use string_cache::DefaultAtom as Atom;
 use walkdir::{DirEntry, WalkDir};
