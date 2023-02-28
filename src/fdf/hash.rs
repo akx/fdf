@@ -35,19 +35,18 @@ fn hash_file<'a>(
     let f = File::open(dent.dir_entry.path())?.take(options.hash_bytes);
     let buf_cap = options.hash_bytes.min(524_288).max(8_192) as usize;
     let mut reader = BufReader::with_capacity(buf_cap, f);
-    let hash: String;
-    match options.hash_algorithm {
+    let hash: String = match options.hash_algorithm {
         HashAlgorithm::Blake3 => {
             let mut b3 = blake3::Hasher::new();
             let n = copy(&mut reader, &mut b3)?;
             assert!(n <= options.hash_bytes);
-            hash = format!("blake3-{}", hex::encode(b3.finalize()));
+            format!("blake3-{}", hex::encode(b3.finalize()))
         }
         HashAlgorithm::Sha256 => {
             let mut sha256 = Sha256::new();
             let n = copy(&mut reader, &mut sha256)?;
             assert!(n <= options.hash_bytes);
-            hash = format!("sha256-{}", hex::encode(sha256.finalize()));
+            format!("sha256-{}", hex::encode(sha256.finalize()))
         }
         HashAlgorithm::Xxh64 => {
             let seed: u64 = key.size % (std::u32::MAX as u64);
@@ -56,9 +55,9 @@ fn hash_file<'a>(
             let n = copy(&mut reader, &mut hw)?;
             assert!(n <= options.hash_bytes);
             let hash_u = hw.0.finish();
-            hash = format!("xxh64-{:x}-{:x}", key.size, hash_u);
+            format!("xxh64-{:x}-{:x}", key.size, hash_u)
         }
-    }
+    };
 
     if options.verbosity >= 2 {
         println!("{} {}", dent.path().display(), hash);
