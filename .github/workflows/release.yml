@@ -1,8 +1,8 @@
 name: Build Release
 
-on: 
+on:
   push:
-    branches: 
+    branches:
       - master
       - release/*
 
@@ -11,21 +11,22 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-18.04, windows-2019, macOS-10.14]
+        os: [ ubuntu-latest, windows-latest, macOS-latest ]
     steps:
+      - uses: actions/checkout@v3
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
-            toolchain: stable
-      - uses: actions/checkout@v1
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2
       - name: Build
         run: cargo build --release
-      - uses: actions/upload-artifact@master
+      - uses: actions/upload-artifact@v3
         if: runner.os != 'Windows'
         with:
           name: fdf-${{ matrix.os }}
           path: target/release/fdf
-      - uses: actions/upload-artifact@master
+      - uses: actions/upload-artifact@v3
         if: runner.os == 'Windows'
         with:
           name: fdf-${{ matrix.os }}.exe
