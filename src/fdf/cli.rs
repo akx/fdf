@@ -148,7 +148,7 @@ fn build_app<'a>() -> App<'a, 'a> {
 }
 
 fn parse_regex_set(args: &ArgMatches, name: &str) -> Result<regex::RegexSet, regex::Error> {
-    regex::RegexSet::new(&values_t!(args, name, String).unwrap_or_else(|_| Vec::new()))
+    regex::RegexSet::new(values_t!(args, name, String).unwrap_or_else(|_| Vec::new()))
 }
 
 fn parse_size(args: &ArgMatches, name: &str) -> anyhow::Result<u64> {
