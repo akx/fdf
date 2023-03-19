@@ -1,13 +1,12 @@
+use clap::ValueEnum;
 use regex::RegexSet;
 use walkdir::DirEntry;
 
-arg_enum! {
-    #[derive(Debug)]
-    pub enum HashAlgorithm {
-        Blake3,
-        Sha256,
-        Xxh64,
-    }
+#[derive(Clone, PartialEq, Eq, Debug, ValueEnum)]
+pub enum HashAlgorithm {
+    Blake3,
+    Sha256,
+    Xxh64,
 }
 
 #[derive(PartialEq, Eq, Debug, Hash)]

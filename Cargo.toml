@@ -5,18 +5,18 @@ authors = ["Aarni Koskela <akx@iki.fi>"]
 edition = "2021"
 
 [dependencies]
-clap = "2.33.3"
+anyhow = "1.0.41"
+blake3 = "0.3.8"
+clap = { version = "4.1.11", features = ["derive", "cargo"] }
 hex = "0.4.3"
 humansize = "1.1.1"
 indicatif = "0.16.2"
+lazy_static = "1.4.0"
 rayon = "1.5.1"
 regex = "1.5.4"
 serde = { version = "1.0.126", features = ["derive"] }
 serde_json = "1.0.64"
 sha2 = "0.9.5"
 string_cache = "0.8.1"
-walkdir = "2.3.2"
 twox-hash = "1.6.0"
-blake3 = "0.3.8"
-anyhow = "1.0.41"
-lazy_static = "1.4.0"
+walkdir = "2.3.2"
