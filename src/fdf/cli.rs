@@ -1,4 +1,4 @@
-use super::options::{ExtensionGroupingOption, HashAlgorithm, Options, ReportOption};
+use super::options::{HashAlgorithm, NameGroupingOption, Options, ReportOption};
 use super::parse_size::parse_size_string;
 use clap::{command, value_parser, Arg, ArgAction, ArgMatches};
 
@@ -62,12 +62,10 @@ pub fn parse_args() -> anyhow::Result<Options> {
                 .default_value("sha256"),
         )
         .arg(
-            Arg::new("extensionless-full-name")
-                .long("extensionless-full-name")
-                .help(
-                    "Group extensionless files by their full basename (instead of a single group)",
-                )
-                .action(ArgAction::SetTrue),
+            Arg::new("name-grouping")
+                .long("name-grouping")
+                .value_parser(value_parser!(NameGroupingOption))
+                .default_value("full-name-when-no-extension"),
         )
         .arg(
             Arg::new("report-json")
@@ -165,11 +163,10 @@ pub fn parse_args() -> anyhow::Result<Options> {
         report_human: read_report_option(&matches, "report-human"),
         report_json: read_report_option(&matches, "report-json"),
         report_file_list: read_report_option(&matches, "report-file-list"),
-        extension_grouping: if matches.get_flag("extensionless-full-name") {
-            ExtensionGroupingOption::FullName
-        } else {
-            ExtensionGroupingOption::SingleGroup
-        },
+        name_grouping: matches
+            .get_one::<NameGroupingOption>("name-grouping")
+            .unwrap()
+            .clone(),
         min_size: *matches.get_one::<u64>("min-size").unwrap(),
         max_size: *matches.get_one::<u64>("max-size").unwrap(),
     })

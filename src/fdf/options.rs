@@ -16,10 +16,11 @@ pub enum ReportOption {
     File(String),
 }
 
-#[derive(PartialEq, Eq, Debug, Hash)]
-pub enum ExtensionGroupingOption {
-    FullName,
-    SingleGroup,
+#[derive(Clone, Debug, PartialEq, ValueEnum)]
+pub enum NameGroupingOption {
+    IgnoreName,
+    FullNameWhenNoExtension,
+    SingleGroupWhenNoExtension,
 }
 
 #[derive(Debug)]
@@ -35,7 +36,7 @@ pub struct Options {
     pub report_json: ReportOption,
     pub report_human: ReportOption,
     pub report_file_list: ReportOption,
-    pub extension_grouping: ExtensionGroupingOption,
+    pub name_grouping: NameGroupingOption,
     pub min_size: u64,
     pub max_size: u64,
 }

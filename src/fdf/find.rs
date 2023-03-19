@@ -1,4 +1,4 @@
-use super::options::{ExtensionGroupingOption, Options};
+use super::options::{NameGroupingOption, Options};
 use super::output::{FindStats, HashStats};
 use humansize::{file_size_opts, FileSize};
 use indicatif::ProgressBar;
@@ -27,14 +27,15 @@ pub struct GroupKey {
 
 fn group_key(options: &Options, dent: &AugDirEntry) -> GroupKey {
     let size = dent.size;
-    let extension = match dent.path().extension() {
-        Some(ps) => Atom::from(ps.to_str().unwrap().to_lowercase()),
-        None => match options.extension_grouping {
-            ExtensionGroupingOption::FullName => {
-                Atom::from(dent.path().file_name().unwrap().to_str().unwrap())
-            }
-            ExtensionGroupingOption::SingleGroup => Atom::from("<no extension>"),
-        },
+    let ex = dent.path().extension();
+    let ng = &options.name_grouping;
+    let extension = match (ng, ex) {
+        (NameGroupingOption::IgnoreName, _) => Atom::from("<none>"),
+        (NameGroupingOption::FullNameWhenNoExtension, None) => {
+            Atom::from(dent.path().file_name().unwrap().to_str().unwrap())
+        }
+        (NameGroupingOption::SingleGroupWhenNoExtension, None) => Atom::from("<none>"),
+        (_, Some(ps)) => Atom::from(ps.to_str().unwrap().to_lowercase()),
     };
     GroupKey { size, extension }
 }
