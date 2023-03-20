@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use string_cache::DefaultAtom as Atom;
 use walkdir::{DirEntry, WalkDir};
+use crate::fdf::interrupt::{is_interrupted, check_and_reset_interrupt};
 
 #[derive(Clone, Debug)]
 pub struct AugDirEntry {
@@ -54,6 +55,7 @@ fn calculate_hash_stats(by_key: &KeyToDentsMap) -> HashStats {
             )
         });
     HashStats {
+        interrupted: false,
         n_files,
         n_bytes,
         n_groups: by_key.len() as u64,
@@ -81,6 +83,9 @@ pub fn find_files(
             let mut by_key_and_path: KeyToStringToDentMap = HashMap::new();
             let walker = WalkDir::new(dir).into_iter();
             for er in walker.filter_entry(|entry| options.is_entry_included(entry)) {
+                if is_interrupted() {
+                    break;
+                }
                 let entry = match er {
                     Ok(entry) => entry,
                     Err(err) => {
@@ -127,6 +132,7 @@ pub fn find_files(
         });
     let mut by_key: KeyToDentsMap = HashMap::new();
     let find_stats = FindStats {
+        interrupted: check_and_reset_interrupt(),
         n_bytes,
         n_dirs,
         n_files,
@@ -138,11 +144,11 @@ pub fn find_files(
         }
     }
     prog.set_message("Calculating statistics...");
-    let stats = calculate_hash_stats(&by_key);
+    let hash_stats = calculate_hash_stats(&by_key);
     prog.finish_and_clear();
     (
         find_stats,
-        stats,
+        hash_stats,
         by_key,
         if return_precull {
             Some(by_key_and_path)

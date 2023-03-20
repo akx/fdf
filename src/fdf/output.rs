@@ -2,6 +2,7 @@ use serde::Serialize;
 
 #[derive(Debug, Serialize)]
 pub struct FindStats {
+    pub interrupted: bool,
     pub n_bytes: u64,
     pub n_dirs: u64,
     pub n_files: u64,
@@ -10,6 +11,7 @@ pub struct FindStats {
 
 #[derive(Debug, Serialize)]
 pub struct HashStats {
+    pub interrupted: bool,
     pub n_bytes: u64,
     pub n_files: u64,
     pub n_groups: u64,

@@ -22,6 +22,7 @@ use std::fs::File;
 use std::io::{stdout, Write};
 use std::process::exit;
 use std::time::{Duration, Instant};
+use crate::fdf::interrupt::{configure_interrupt, is_interrupted, check_and_reset_interrupt};
 
 fn process_key_group(key: &GroupKey, dents: &[AugDirEntry], options: &Options) -> KeyGroupResult {
     KeyGroupResult {
@@ -81,10 +82,14 @@ fn do_hash(options: &mut Options, by_key: KeyToDentsMap) -> Vec<KeyGroupResult> 
     let key_group_results: Vec<KeyGroupResult> = sorted_pairs
         .par_iter()
         .map(|(key, dents)| {
+            if is_interrupted() {
+                return None;
+            }
             prog.set_message(format!("{}/{}", key.extension, key.size));
             prog.inc(1);
-            process_key_group(key, dents, options)
+            Some(process_key_group(key, dents, options))
         })
+        .filter_map(|x| x)
         .collect();
     prog.finish();
     key_group_results
@@ -140,8 +145,8 @@ fn print_file_list(writer: &mut dyn Write, ksdmap: &KeyToStringToDentMap) {
 }
 
 fn maybe_write_report<W>(report_option: &ReportOption, writer: W)
-where
-    W: Fn(&mut dyn Write),
+    where
+        W: Fn(&mut dyn Write),
 {
     let stream_box_opt: Option<Box<dyn Write>> = match report_option {
         ReportOption::None => None,
@@ -165,8 +170,9 @@ fn main() {
         eprintln!("No output arguments set; assuming human output to stdout desired.");
         options.report_human = ReportOption::Stdout;
     }
+    configure_interrupt();
     let start_time = Instant::now();
-    let (find_stats, hash_stats, by_key, precull_files) =
+    let (find_stats, mut hash_stats, by_key, precull_files) =
         fdf::find::find_files(&options, options.report_file_list != ReportOption::None);
     eprintln!(
         "Found {} files in {} directories ({} groups before culling) in {:.2} s, {}.",
@@ -195,6 +201,7 @@ fn main() {
     );
     let hash_start_time = Instant::now();
     let key_group_results = do_hash(&mut options, by_key);
+    hash_stats.interrupted = check_and_reset_interrupt();
     print_stage_duration("Hashing", &hash_stats, hash_start_time.elapsed());
     let output_start_time = Instant::now();
     maybe_write_report(&options.report_human, |stream| {

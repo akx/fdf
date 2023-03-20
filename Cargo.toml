@@ -8,6 +8,7 @@ edition = "2021"
 anyhow = "1.0.41"
 blake3 = "0.3.8"
 clap = { version = "4.1.11", features = ["derive", "cargo"] }
+ctrlc = "3.2.5"
 hex = "0.4.3"
 humansize = "1.1.1"
 indicatif = "0.16.2"
