@@ -40,7 +40,7 @@ fn hash_file<'a>(
             let mut b3 = blake3::Hasher::new();
             let n = copy(&mut reader, &mut b3)?;
             assert!(n <= options.hash_bytes);
-            format!("blake3-{}", hex::encode(b3.finalize()))
+            format!("blake3-{}", hex::encode(b3.finalize().as_bytes()))
         }
         HashAlgorithm::Sha256 => {
             let mut sha256 = Sha256::new();

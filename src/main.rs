@@ -10,11 +10,12 @@ extern crate walkdir;
 mod fdf;
 
 use crate::fdf::find::KeyToStringToDentMap;
+use crate::fdf::interrupt::{check_and_reset_interrupt, configure_interrupt, is_interrupted};
 use fdf::cli::parse_args;
 use fdf::find::{AugDirEntry, GroupKey, KeyToDentsMap};
 use fdf::options::{Options, ReportOption};
 use fdf::output::*;
-use humansize::{file_size_opts, FileSize};
+use humansize::{format_size, DECIMAL};
 use indicatif::{ProgressBar, ProgressStyle};
 use rayon::prelude::*;
 use std::error::Error;
@@ -22,7 +23,6 @@ use std::fs::File;
 use std::io::{stdout, Write};
 use std::process::exit;
 use std::time::{Duration, Instant};
-use crate::fdf::interrupt::{configure_interrupt, is_interrupted, check_and_reset_interrupt};
 
 fn process_key_group(key: &GroupKey, dents: &[AugDirEntry], options: &Options) -> KeyGroupResult {
     KeyGroupResult {
@@ -49,7 +49,7 @@ fn print_key_group_result(
     if !kgr.hash_groups.iter().any(|hg| hg.files.len() > 1) {
         return Ok(());
     }
-    let size = kgr.size.file_size(file_size_opts::CONVENTIONAL)?;
+    let size = format_size(kgr.size, DECIMAL);
 
     for hg in &kgr.hash_groups {
         let n_files = hg.files.len();
@@ -76,7 +76,9 @@ fn do_hash(options: &mut Options, by_key: KeyToDentsMap) -> Vec<KeyGroupResult> 
     sorted_pairs.sort_unstable_by(|(ka, _), (kb, _)| kb.size.cmp(&ka.size));
     let prog = ProgressBar::new(sorted_pairs.len() as u64);
     prog.set_style(
-        ProgressStyle::default_bar().template("{pos:>6}/{len:6} {msg} (ETA {eta}) {wide_bar}"),
+        ProgressStyle::default_bar()
+            .template("{pos:>6}/{len:6} {msg} (ETA {eta}) {wide_bar}")
+            .unwrap(),
     );
 
     let key_group_results: Vec<KeyGroupResult> = sorted_pairs
@@ -105,9 +107,7 @@ fn print_stage_duration(label: &str, hash_stats: &HashStats, d: Duration) {
         label,
         time,
         files_per_sec,
-        bytes_per_sec
-            .file_size(file_size_opts::CONVENTIONAL)
-            .unwrap(),
+        format_size(bytes_per_sec, DECIMAL),
     );
 }
 
@@ -127,9 +127,7 @@ fn print_duplicate_info(key_group_results: &[KeyGroupResult]) {
         eprintln!(
             "{} duplicate files, {} wasted.",
             n_duplicate_files,
-            n_bytes_wasted
-                .file_size(file_size_opts::CONVENTIONAL)
-                .unwrap(),
+            format_size(n_bytes_wasted, DECIMAL),
         );
     } else {
         eprintln!("No duplicates.");
@@ -145,8 +143,8 @@ fn print_file_list(writer: &mut dyn Write, ksdmap: &KeyToStringToDentMap) {
 }
 
 fn maybe_write_report<W>(report_option: &ReportOption, writer: W)
-    where
-        W: Fn(&mut dyn Write),
+where
+    W: Fn(&mut dyn Write),
 {
     let stream_box_opt: Option<Box<dyn Write>> = match report_option {
         ReportOption::None => None,
@@ -180,10 +178,7 @@ fn main() {
         find_stats.n_dirs,
         find_stats.n_precull_groups,
         start_time.elapsed().as_secs_f32(),
-        find_stats
-            .n_bytes
-            .file_size(file_size_opts::CONVENTIONAL)
-            .unwrap()
+        format_size(find_stats.n_bytes, DECIMAL),
     );
     if precull_files.is_some() {
         maybe_write_report(&options.report_file_list, |stream| {
@@ -194,10 +189,7 @@ fn main() {
         "Hashing {} groups, {} files, {}.",
         hash_stats.n_groups,
         hash_stats.n_files,
-        hash_stats
-            .n_bytes
-            .file_size(file_size_opts::CONVENTIONAL)
-            .unwrap()
+        format_size(hash_stats.n_bytes, DECIMAL),
     );
     let hash_start_time = Instant::now();
     let key_group_results = do_hash(&mut options, by_key);

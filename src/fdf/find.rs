@@ -1,12 +1,12 @@
 use super::options::{NameGroupingOption, Options};
 use super::output::{FindStats, HashStats};
-use humansize::{file_size_opts, FileSize};
+use crate::fdf::interrupt::{check_and_reset_interrupt, is_interrupted};
+use humansize::{format_size, DECIMAL};
 use indicatif::ProgressBar;
 use std::collections::HashMap;
 use std::path::Path;
 use string_cache::DefaultAtom as Atom;
 use walkdir::{DirEntry, WalkDir};
-use crate::fdf::interrupt::{is_interrupted, check_and_reset_interrupt};
 
 #[derive(Clone, Debug)]
 pub struct AugDirEntry {
@@ -75,7 +75,6 @@ pub fn find_files(
     let mut n_dirs: u64 = 0;
     let mut n_files: u64 = 0;
     let mut n_bytes: u64 = 0;
-    prog.set_draw_delta(100);
     let by_key_and_path: KeyToStringToDentMap = options
         .directories
         .iter()
@@ -118,7 +117,7 @@ pub fn find_files(
                 let key = group_key(options, &aug_entry);
                 let by_path = by_key_and_path.entry(key).or_insert_with(HashMap::new);
                 by_path.insert(path_str, aug_entry);
-                let size = n_bytes.file_size(file_size_opts::CONVENTIONAL).unwrap();
+                let size = format_size(n_bytes, DECIMAL);
                 prog.set_message(format!("{} dirs, {} files, {}...", n_dirs, n_files, size));
                 prog.inc(1);
             }
