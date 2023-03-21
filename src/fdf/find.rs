@@ -1,8 +1,7 @@
 use super::options::{NameGroupingOption, Options};
 use super::output::{FindStats, HashStats};
 use crate::fdf::interrupt::{check_and_reset_interrupt, is_interrupted};
-use humansize::{format_size, DECIMAL};
-use indicatif::ProgressBar;
+use indicatif::{HumanBytes, ProgressBar};
 use std::collections::HashMap;
 use std::path::Path;
 use string_cache::DefaultAtom as Atom;
@@ -117,7 +116,7 @@ pub fn find_files(
                 let key = group_key(options, &aug_entry);
                 let by_path = by_key_and_path.entry(key).or_insert_with(HashMap::new);
                 by_path.insert(path_str, aug_entry);
-                let size = format_size(n_bytes, DECIMAL);
+                let size = HumanBytes(n_bytes).to_string();
                 prog.set_message(format!("{} dirs, {} files, {}...", n_dirs, n_files, size));
                 prog.inc(1);
             }

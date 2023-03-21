@@ -1,12 +1,3 @@
-extern crate clap;
-extern crate humansize;
-extern crate rayon;
-extern crate regex;
-extern crate serde;
-extern crate serde_json;
-extern crate string_cache;
-extern crate walkdir;
-
 mod fdf;
 
 use crate::fdf::find::KeyToStringToDentMap;
@@ -15,8 +6,7 @@ use fdf::cli::parse_args;
 use fdf::find::{AugDirEntry, GroupKey, KeyToDentsMap};
 use fdf::options::{Options, ReportOption};
 use fdf::output::*;
-use humansize::{format_size, DECIMAL};
-use indicatif::{ProgressBar, ProgressStyle};
+use indicatif::{HumanBytes, ProgressBar, ProgressStyle};
 use rayon::prelude::*;
 use std::error::Error;
 use std::fs::File;
@@ -49,7 +39,7 @@ fn print_key_group_result(
     if !kgr.hash_groups.iter().any(|hg| hg.files.len() > 1) {
         return Ok(());
     }
-    let size = format_size(kgr.size, DECIMAL);
+    let size = HumanBytes(kgr.size).to_string();
 
     for hg in &kgr.hash_groups {
         let n_files = hg.files.len();
@@ -107,7 +97,7 @@ fn print_stage_duration(label: &str, hash_stats: &HashStats, d: Duration) {
         label,
         time,
         files_per_sec,
-        format_size(bytes_per_sec, DECIMAL),
+        HumanBytes(bytes_per_sec as u64),
     );
 }
 
@@ -127,7 +117,7 @@ fn print_duplicate_info(key_group_results: &[KeyGroupResult]) {
         eprintln!(
             "{} duplicate files, {} wasted.",
             n_duplicate_files,
-            format_size(n_bytes_wasted, DECIMAL),
+            HumanBytes(n_bytes_wasted),
         );
     } else {
         eprintln!("No duplicates.");
@@ -178,7 +168,7 @@ fn main() {
         find_stats.n_dirs,
         find_stats.n_precull_groups,
         start_time.elapsed().as_secs_f32(),
-        format_size(find_stats.n_bytes, DECIMAL),
+        HumanBytes(find_stats.n_bytes),
     );
     if precull_files.is_some() {
         maybe_write_report(&options.report_file_list, |stream| {
@@ -189,7 +179,7 @@ fn main() {
         "Hashing {} groups, {} files, {}.",
         hash_stats.n_groups,
         hash_stats.n_files,
-        format_size(hash_stats.n_bytes, DECIMAL),
+        HumanBytes(hash_stats.n_bytes),
     );
     let hash_start_time = Instant::now();
     let key_group_results = do_hash(&mut options, by_key);
