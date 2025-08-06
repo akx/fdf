@@ -10,9 +10,10 @@ use indicatif::{HumanBytes, ProgressBar, ProgressStyle};
 use rayon::prelude::*;
 use std::error::Error;
 use std::fs::File;
-use std::io::{stdout, Write};
+use std::io::{stdout, IsTerminal, Write};
 use std::process::exit;
 use std::time::{Duration, Instant};
+use termcolor::{Color, ColorChoice, ColorSpec, NoColor, StandardStream, WriteColor};
 
 fn process_key_group(key: &GroupKey, dents: &[AugDirEntry], options: &Options) -> KeyGroupResult {
     KeyGroupResult {
@@ -33,12 +34,13 @@ fn process_key_group(key: &GroupKey, dents: &[AugDirEntry], options: &Options) -
 }
 
 fn print_key_group_result(
-    stream: &mut dyn Write,
+    stream: &mut dyn WriteColor,
     kgr: &KeyGroupResult,
 ) -> Result<(), Box<dyn Error>> {
     if !kgr.hash_groups.iter().any(|hg| hg.files.len() > 1) {
         return Ok(());
     }
+
     let size = HumanBytes(kgr.size).to_string();
 
     for hg in &kgr.hash_groups {
@@ -46,13 +48,42 @@ fn print_key_group_result(
         if n_files <= 1 {
             continue;
         }
+        stream.set_color(
+            ColorSpec::new()
+                .set_intense(true)
+                .set_underline(true)
+                .set_fg(Some(Color::Yellow)),
+        )?;
         writeln!(
             stream,
             "### {} / {} / {} ({} files)",
             size, kgr.identifier, hg.hash, n_files
         )?;
+        stream.reset()?;
+        // Find common prefix for paths
+        let common_prefix = hg
+            .files
+            .iter()
+            .map(|path| path.as_str())
+            .reduce(|a, b| {
+                let min_len = a.len().min(b.len());
+                let mut i = 0;
+                while i < min_len && a.as_bytes()[i] == b.as_bytes()[i] {
+                    i += 1;
+                }
+                &a[..i]
+            })
+            .unwrap_or("");
+
         for path in &hg.files {
-            writeln!(stream, "{}", path)?;
+            if common_prefix.len() > 1 {
+                stream.set_color(ColorSpec::new().set_dimmed(true))?;
+                write!(stream, "{}", common_prefix)?;
+                stream.reset()?;
+                writeln!(stream, "{}", &path[common_prefix.len()..])?;
+            } else {
+                writeln!(stream, "{}", path)?;
+            }
         }
         writeln!(stream)?;
     }
@@ -134,12 +165,18 @@ fn print_file_list(writer: &mut dyn Write, ksdmap: &KeyToStringToDentMap) {
 
 fn maybe_write_report<W>(report_option: &ReportOption, writer: W)
 where
-    W: Fn(&mut dyn Write),
+    W: Fn(&mut dyn WriteColor),
 {
-    let stream_box_opt: Option<Box<dyn Write>> = match report_option {
+    let stream_box_opt: Option<Box<dyn WriteColor>> = match report_option {
         ReportOption::None => None,
-        ReportOption::Stdout => Some(Box::new(stdout())),
-        ReportOption::File(name) => Some(Box::new(File::create(name).unwrap())),
+        ReportOption::Stdout => Some(Box::new(StandardStream::stdout(
+            if stdout().is_terminal() {
+                ColorChoice::Auto
+            } else {
+                ColorChoice::Never
+            },
+        ))),
+        ReportOption::File(name) => Some(Box::new(NoColor::new(File::create(name).unwrap()))),
     };
     match stream_box_opt {
         None => {}
