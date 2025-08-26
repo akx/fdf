@@ -6,12 +6,8 @@ lazy_static! {
     pub static ref INTERRUPTED: Arc<AtomicBool> = Arc::new(AtomicBool::new(false));
 }
 
-pub fn configure_interrupt() {
-    ctrlc::set_handler(move || {
-        eprintln!("received Ctrl+C!");
-        INTERRUPTED.store(true, Ordering::Relaxed);
-    })
-    .unwrap_or_else(|e| eprintln!("Error setting Ctrl-C handler: {}", e));
+pub fn set_interrupted() {
+    INTERRUPTED.store(true, Ordering::Relaxed);
 }
 
 pub fn is_interrupted() -> bool {

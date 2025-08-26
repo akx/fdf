@@ -1,22 +1,14 @@
-use clap::ValueEnum;
 use regex::RegexSet;
 use walkdir::DirEntry;
 
-#[derive(Clone, PartialEq, Eq, Debug, ValueEnum)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum HashAlgorithm {
     Blake3,
     Sha256,
     Xxh64,
 }
 
-#[derive(PartialEq, Eq, Debug, Hash)]
-pub enum ReportOption {
-    None,
-    Stdout,
-    File(String),
-}
-
-#[derive(Clone, Debug, PartialEq, ValueEnum)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum NameGroupingOption {
     IgnoreName,
     FullNameWhenNoExtension,
@@ -33,9 +25,6 @@ pub struct Options {
     pub verbosity: u64,
     pub hash_bytes: u64,
     pub hash_algorithm: HashAlgorithm,
-    pub report_json: ReportOption,
-    pub report_human: ReportOption,
-    pub report_file_list: ReportOption,
     pub name_grouping: NameGroupingOption,
     pub min_size: u64,
     pub max_size: u64,

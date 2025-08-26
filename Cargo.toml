@@ -1,23 +1,16 @@
-[package]
-name = "fdf"
+[workspace]
+members = ["crates/fdf", "crates/fdf_cli"]
+default-members = ["crates/fdf_cli"]
+resolver = "2"
+
+[workspace.package]
 version = "0.5.0"
 authors = ["Aarni Koskela <akx@iki.fi>"]
 edition = "2021"
 
-[dependencies]
+[workspace.dependencies]
 anyhow = "1.0.98"
-blake3 = "1.8.2"
-clap = { version = "4.5.42", features = ["derive", "cargo"] }
-ctrlc = "3.4.7"
-hex = "0.4.3"
-indicatif = "0.18.0"
 lazy_static = "1.5.0"
 rayon = "1.10.0"
 regex = "1.11.1"
 serde = { version = "1.0.219", features = ["derive"] }
-serde_json = "1.0.142"
-sha2 = "0.10.9"
-string_cache = "0.8.9"
-termcolor = "1.4.1"
-twox-hash = "2.1.1"
-walkdir = "2.5.0"

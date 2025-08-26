@@ -1,16 +1,20 @@
-mod fdf;
+mod cli;
+mod cli_options;
+mod parse_size;
 
-use crate::fdf::find::KeyToStringToDentMap;
-use crate::fdf::interrupt::{check_and_reset_interrupt, configure_interrupt, is_interrupted};
-use fdf::cli::parse_args;
-use fdf::find::{AugDirEntry, GroupKey, KeyToDentsMap};
-use fdf::options::{Options, ReportOption};
-use fdf::output::*;
+use crate::cli::parse_args;
+use crate::cli_options::{CliOptions, ReportOption};
+use fdf::{
+    find::KeyToStringToDentMap,
+    interrupt::{check_and_reset_interrupt, is_interrupted, set_interrupted},
+    AugDirEntry, GrandResult, GroupKey, HashGroupResult, HashStats, KeyGroupResult, KeyToDentsMap,
+    Options,
+};
 use indicatif::{HumanBytes, ProgressBar, ProgressStyle};
 use rayon::prelude::*;
 use std::error::Error;
 use std::fs::File;
-use std::io::{stdout, IsTerminal, Write};
+use std::io::{stdout, Write};
 use std::process::exit;
 use std::time::{Duration, Instant};
 use termcolor::{Color, ColorChoice, ColorSpec, NoColor, StandardStream, WriteColor};
@@ -78,11 +82,11 @@ fn print_key_group_result(
         for path in &hg.files {
             if common_prefix.len() > 1 {
                 stream.set_color(ColorSpec::new().set_dimmed(true))?;
-                write!(stream, "{}", common_prefix)?;
+                write!(stream, "{common_prefix}")?;
                 stream.reset()?;
                 writeln!(stream, "{}", &path[common_prefix.len()..])?;
             } else {
-                writeln!(stream, "{}", path)?;
+                writeln!(stream, "{path}")?;
             }
         }
         writeln!(stream)?;
@@ -90,7 +94,7 @@ fn print_key_group_result(
     Ok(())
 }
 
-fn do_hash(options: &mut Options, by_key: KeyToDentsMap) -> Vec<KeyGroupResult> {
+fn do_hash(core_options: &Options, by_key: KeyToDentsMap) -> Vec<KeyGroupResult> {
     let mut sorted_pairs = by_key
         .iter()
         .collect::<Vec<(&GroupKey, &Vec<AugDirEntry>)>>();
@@ -110,7 +114,7 @@ fn do_hash(options: &mut Options, by_key: KeyToDentsMap) -> Vec<KeyGroupResult> 
             }
             prog.set_message(format!("{}/{}", key.extension, key.size));
             prog.inc(1);
-            Some(process_key_group(key, dents, options))
+            Some(process_key_group(key, dents, core_options))
         })
         .filter_map(|x| x)
         .collect();
@@ -158,7 +162,7 @@ fn print_duplicate_info(key_group_results: &[KeyGroupResult]) {
 fn print_file_list(writer: &mut dyn Write, ksdmap: &KeyToStringToDentMap) {
     for (_key, path_to_dent_map) in ksdmap.iter() {
         for key in path_to_dent_map.keys() {
-            writeln!(writer, "{}", key).unwrap();
+            writeln!(writer, "{key}").unwrap();
         }
     }
 }
@@ -167,6 +171,7 @@ fn maybe_write_report<W>(report_option: &ReportOption, writer: W)
 where
     W: Fn(&mut dyn WriteColor),
 {
+    use std::io::IsTerminal;
     let stream_box_opt: Option<Box<dyn WriteColor>> = match report_option {
         ReportOption::None => None,
         ReportOption::Stdout => Some(Box::new(StandardStream::stdout(
@@ -186,19 +191,32 @@ where
     };
 }
 
+fn configure_interrupt() {
+    ctrlc::set_handler(move || {
+        eprintln!("received Ctrl+C!");
+        set_interrupted();
+    })
+    .unwrap_or_else(|e| eprintln!("Error setting Ctrl-C handler: {}", e));
+}
+
 fn main() {
-    let mut options = parse_args().unwrap_or_else(|err| {
-        eprintln!("{}", err);
+    let (options, cli_options) = parse_args().unwrap_or_else(|err| {
+        eprintln!("{err}");
         exit(1);
     });
-    if options.report_json == ReportOption::None && options.report_human == ReportOption::None {
+    let CliOptions {
+        report_json,
+        mut report_human,
+        report_file_list,
+    } = cli_options;
+    if report_json == ReportOption::None && report_human == ReportOption::None {
         eprintln!("No output arguments set; assuming human output to stdout desired.");
-        options.report_human = ReportOption::Stdout;
+        report_human = ReportOption::Stdout;
     }
     configure_interrupt();
     let start_time = Instant::now();
     let (find_stats, mut hash_stats, by_key, precull_files) =
-        fdf::find::find_files(&options, options.report_file_list != ReportOption::None);
+        fdf::find::find_files(&options, report_file_list != ReportOption::None);
     eprintln!(
         "Found {} files in {} directories ({} groups before culling) in {:.2} s, {}.",
         find_stats.n_files,
@@ -207,9 +225,9 @@ fn main() {
         start_time.elapsed().as_secs_f32(),
         HumanBytes(find_stats.n_bytes),
     );
-    if precull_files.is_some() {
-        maybe_write_report(&options.report_file_list, |stream| {
-            print_file_list(stream, precull_files.as_ref().unwrap());
+    if let Some(precull_files) = precull_files {
+        maybe_write_report(&report_file_list, |stream| {
+            print_file_list(stream, &precull_files);
         });
     }
     eprintln!(
@@ -219,16 +237,16 @@ fn main() {
         HumanBytes(hash_stats.n_bytes),
     );
     let hash_start_time = Instant::now();
-    let key_group_results = do_hash(&mut options, by_key);
+    let key_group_results = do_hash(&options, by_key);
     hash_stats.interrupted = check_and_reset_interrupt();
     print_stage_duration("Hashing", &hash_stats, hash_start_time.elapsed());
     let output_start_time = Instant::now();
-    maybe_write_report(&options.report_human, |stream| {
+    maybe_write_report(&report_human, |stream| {
         for kgr in key_group_results.iter() {
             print_key_group_result(stream, kgr).unwrap();
         }
     });
-    maybe_write_report(&options.report_json, |stream| {
+    maybe_write_report(&report_json, |stream| {
         let gr = GrandResult {
             find_stats: &find_stats,
             hash_stats: &hash_stats,

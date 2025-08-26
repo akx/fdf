@@ -1,5 +1,5 @@
-use super::find::{AugDirEntry, GroupKey};
-use super::options::{HashAlgorithm, Options};
+use crate::find::{AugDirEntry, GroupKey};
+use crate::options::{HashAlgorithm, Options};
 use rayon::prelude::*;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
@@ -18,12 +18,12 @@ impl<T: Hasher> Write for HashWriter<T> {
         Ok(buf.len())
     }
 
-    fn write_all(&mut self, buf: &[u8]) -> io::Result<()> {
-        self.write(buf).map(|_| ())
-    }
-
     fn flush(&mut self) -> io::Result<()> {
         Ok(())
+    }
+
+    fn write_all(&mut self, buf: &[u8]) -> io::Result<()> {
+        self.write(buf).map(|_| ())
     }
 }
 

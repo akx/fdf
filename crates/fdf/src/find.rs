@@ -1,6 +1,6 @@
-use super::options::{NameGroupingOption, Options};
-use super::output::{FindStats, HashStats};
-use crate::fdf::interrupt::{check_and_reset_interrupt, is_interrupted};
+use crate::interrupt::{check_and_reset_interrupt, is_interrupted};
+use crate::options::{NameGroupingOption, Options};
+use crate::output::{FindStats, HashStats};
 use indicatif::{HumanBytes, ProgressBar};
 use std::collections::HashMap;
 use std::path::Path;

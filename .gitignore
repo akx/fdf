@@ -1,3 +1,5 @@
 **/*.rs.bk
 .idea
+/.c*e
+/C*E.md
 /target
