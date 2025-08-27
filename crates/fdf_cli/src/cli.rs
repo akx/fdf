@@ -39,6 +39,10 @@ pub struct Args {
     #[arg(short = 'b', long = "hash-bytes", value_parser = parse_size, default_value = "18446744073709551615", hide_default_value = true)]
     pub hash_bytes: u64,
 
+    /// File size threshold for oneshot hashing (avoids streaming for small files)
+    #[arg(long = "hash-oneshot-size", value_parser = parse_size, default_value = "64KiB")]
+    pub hash_oneshot_size: u64,
+
     /// Select a hash algorithm; there are speed/quality tradeoffs
     #[arg(short = 'a', long = "hash-algorithm", default_value = "sha256")]
     pub hash_algorithm: HashAlgorithm,
@@ -100,6 +104,7 @@ pub fn parse_args() -> anyhow::Result<(CoreOptions, CliOptions)> {
         dir_exclude_regexes,
         verbosity: args.verbose as u64,
         hash_bytes: args.hash_bytes,
+        hash_oneshot_size: args.hash_oneshot_size,
         hash_algorithm: args.hash_algorithm.into(),
         name_grouping: args.name_grouping.into(),
         min_size: args.min_size,
