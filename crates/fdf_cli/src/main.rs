@@ -197,7 +197,7 @@ fn configure_interrupt() {
         eprintln!("received Ctrl+C!");
         set_interrupted();
     })
-    .unwrap_or_else(|e| eprintln!("Error setting Ctrl-C handler: {}", e));
+    .unwrap_or_else(|e| eprintln!("Error setting Ctrl-C handler: {e}"));
 }
 
 fn init_tracing(verbosity: u8) {
