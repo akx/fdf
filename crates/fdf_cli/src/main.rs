@@ -18,6 +18,7 @@ use std::io::{stdout, Write};
 use std::process::exit;
 use std::time::{Duration, Instant};
 use termcolor::{Color, ColorChoice, ColorSpec, NoColor, StandardStream, WriteColor};
+use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 fn process_key_group(key: &GroupKey, dents: &[AugDirEntry], options: &Options) -> KeyGroupResult {
     KeyGroupResult {
@@ -199,11 +200,38 @@ fn configure_interrupt() {
     .unwrap_or_else(|e| eprintln!("Error setting Ctrl-C handler: {}", e));
 }
 
+fn init_tracing(verbosity: u8) {
+    let filter = match verbosity {
+        0 => "warn",
+        1 => "info",
+        2 => "debug",
+        _ => "trace",
+    };
+
+    let env_filter = EnvFilter::try_from_default_env()
+        .or_else(|_| EnvFilter::try_new(filter))
+        .unwrap();
+
+    tracing_subscriber::registry()
+        .with(env_filter)
+        .with(
+            fmt::layer()
+                .with_ansi(true)
+                .with_target(false)
+                .with_level(true)
+                .compact(),
+        )
+        .init();
+}
+
 fn main() {
     let (options, cli_options) = parse_args().unwrap_or_else(|err| {
         eprintln!("{err}");
         exit(1);
     });
+
+    init_tracing(options.verbosity as u8);
+
     let CliOptions {
         report_json,
         mut report_human,

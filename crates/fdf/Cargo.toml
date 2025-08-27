@@ -15,5 +15,6 @@ regex.workspace = true
 serde.workspace = true
 sha2 = { version = "0.10.9", features = ["asm"] }
 string_cache = "0.9.0"
+tracing.workspace = true
 twox-hash = "2.1.1"
 walkdir = "2.5.0"

@@ -5,6 +5,7 @@ use indicatif::{HumanBytes, ProgressBar};
 use std::collections::HashMap;
 use std::path::Path;
 use string_cache::DefaultAtom as Atom;
+use tracing::{debug, error};
 use walkdir::{DirEntry, WalkDir};
 
 #[derive(Clone, Debug)]
@@ -87,7 +88,7 @@ pub fn find_files(
                 let entry = match er {
                     Ok(entry) => entry,
                     Err(err) => {
-                        eprintln!("[!] {}", err);
+                        error!("[!] {}", err);
                         continue;
                     }
                 };
@@ -106,7 +107,7 @@ pub fn find_files(
                 n_files += 1;
                 n_bytes += size;
                 if options.verbosity >= 3 {
-                    println!("{}", entry.path().display());
+                    debug!("Found: {}", entry.path().display());
                 }
                 let path_str = entry.path().to_str().unwrap().to_string();
                 let aug_entry = AugDirEntry {
@@ -114,17 +115,17 @@ pub fn find_files(
                     size,
                 };
                 let key = group_key(options, &aug_entry);
-                let by_path = by_key_and_path.entry(key).or_insert_with(HashMap::new);
+                let by_path = by_key_and_path.entry(key).or_default();
                 by_path.insert(path_str, aug_entry);
                 let size = HumanBytes(n_bytes).to_string();
-                prog.set_message(format!("{} dirs, {} files, {}...", n_dirs, n_files, size));
+                prog.set_message(format!("{n_dirs} dirs, {n_files} files, {size}..."));
                 prog.inc(1);
             }
             by_key_and_path
         })
         .fold(HashMap::new(), |mut accmap, map| {
             for (key, ents) in map {
-                accmap.entry(key).or_insert_with(HashMap::new).extend(ents);
+                accmap.entry(key).or_default().extend(ents);
             }
             accmap
         });

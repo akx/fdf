@@ -8,6 +8,7 @@ use std::fs::File;
 use std::hash::Hasher;
 use std::io;
 use std::io::{copy, BufReader, Read, Write};
+use tracing::{debug, error};
 use twox_hash::XxHash64;
 
 // via https://stackoverflow.com/questions/48533445/proper-way-to-hash-a-reader-in-rust
@@ -33,7 +34,7 @@ fn hash_file<'a>(
     options: &Options,
 ) -> Result<(&'a AugDirEntry, String), Box<dyn Error>> {
     let f = File::open(dent.dir_entry.path())?.take(options.hash_bytes);
-    let buf_cap = options.hash_bytes.min(524_288).max(8_192) as usize;
+    let buf_cap = options.hash_bytes.clamp(8_192, 524_288) as usize;
     let mut reader = BufReader::with_capacity(buf_cap, f);
     let hash: String = match options.hash_algorithm {
         HashAlgorithm::Blake3 => {
@@ -49,7 +50,7 @@ fn hash_file<'a>(
             format!("sha256-{}", hex::encode(sha256.finalize()))
         }
         HashAlgorithm::Xxh64 => {
-            let seed: u64 = key.size % (std::u32::MAX as u64);
+            let seed: u64 = key.size % (u32::MAX as u64);
             let hasher = XxHash64::with_seed(seed);
             let mut hw = HashWriter(hasher);
             let n = copy(&mut reader, &mut hw)?;
@@ -60,7 +61,7 @@ fn hash_file<'a>(
     };
 
     if options.verbosity >= 2 {
-        println!("{} {}", dent.path().display(), hash);
+        debug!("Hashed: {} {}", dent.path().display(), hash);
     }
     Ok((dent, hash))
 }
@@ -75,14 +76,14 @@ pub fn hash_key_group<'a>(
         .map(|dent| match hash_file(key, dent, options) {
             Ok(v) => Ok(v),
             Err(x) => {
-                println!("Unable to hash {:?}: {}", dent, x);
+                error!("Unable to hash {:?}: {}", dent, x);
                 Err(())
             }
         })
         .collect();
     let mut hm: HashMap<String, Vec<&AugDirEntry>> = HashMap::new();
     for (dent, hash) in hashes.into_iter().flatten() {
-        hm.entry(hash).or_insert_with(Vec::new).push(dent)
+        hm.entry(hash).or_default().push(dent)
     }
     hm
 }
