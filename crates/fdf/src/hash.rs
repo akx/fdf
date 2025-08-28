@@ -16,12 +16,17 @@ enum HashResult {
 }
 
 impl HashResult {
-    fn format_as_string(&self) -> String {
+    fn format_as_string(&self, hash_bytes: Option<u64>) -> String {
+        let midfix = if let Some(b) = hash_bytes {
+            format!(":{b}")
+        } else {
+            "".to_string()
+        };
         match self {
-            HashResult::Blake3(bytes) => format!("blake3-{}", hex::encode(bytes)),
-            HashResult::Sha256(bytes) => format!("sha256-{}", hex::encode(bytes)),
+            HashResult::Blake3(bytes) => format!("blake3{midfix}-{}", hex::encode(bytes)),
+            HashResult::Sha256(bytes) => format!("sha256{midfix}-{}", hex::encode(bytes)),
             HashResult::Xxh64(file_size, hash_value) => {
-                format!("xxh64-{file_size:x}-{hash_value:x}")
+                format!("xxh64{midfix}-{file_size:x}-{hash_value:x}")
             }
         }
     }
@@ -97,8 +102,11 @@ pub fn hash_file<'a>(
     dent: &'a AugDirEntry,
     options: &Options,
 ) -> Result<(&'a AugDirEntry, String), Box<dyn Error>> {
-    let file_size = dent.size;
-    let bytes_to_hash = file_size.min(options.hash_bytes);
+    let bytes_to_hash = if let Some(b) = options.hash_bytes {
+        dent.size.min(b)
+    } else {
+        dent.size
+    };
 
     let seed = key.size % (u32::MAX as u64);
     let hasher = create_hasher(&options.hash_algorithm, seed, key.size);
@@ -109,13 +117,19 @@ pub fn hash_file<'a>(
         f.read_exact(&mut buffer)?;
         hasher.hash_oneshot(&buffer)
     } else {
-        let f = File::open(dent.dir_entry.path())?.take(options.hash_bytes);
-        let buf_cap = options.hash_bytes.clamp(8_192, 524_288) as usize;
+        let hash_bytes = options.hash_bytes.unwrap_or(u64::MAX);
+        let f = File::open(dent.dir_entry.path())?.take(hash_bytes);
+        let buf_cap = hash_bytes.clamp(8_192, 524_288) as usize;
         let mut reader = BufReader::with_capacity(buf_cap, f);
         hasher.hash_streaming(&mut reader)?
     };
 
-    let hash = hash_result.format_as_string();
+    // If we didn't hash the whole file, note that in the formatted hex string.
+    let hash = hash_result.format_as_string(if bytes_to_hash < dent.size {
+        options.hash_bytes
+    } else {
+        None
+    });
 
     if options.verbosity >= 2 {
         tracing::debug!("Hashed: {} {}", dent.path().display(), hash);

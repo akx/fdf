@@ -23,7 +23,7 @@ pub struct Options {
     pub dir_include_regexes: RegexSet,
     pub dir_exclude_regexes: RegexSet,
     pub verbosity: u64,
-    pub hash_bytes: u64,
+    pub hash_bytes: Option<u64>,
     pub hash_oneshot_size: u64,
     pub hash_algorithm: HashAlgorithm,
     pub name_grouping: NameGroupingOption,
