@@ -1,15 +1,12 @@
 use crate::find::{AugDirEntry, GroupKey};
 use crate::options::Options;
 use crate::HashAlgorithm;
-use rayon::prelude::*;
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
 use std::error::Error;
 use std::fs::File;
 use std::hash::Hasher;
 use std::io;
 use std::io::{copy, BufReader, Read, Write};
-use tracing::{debug, error};
 use twox_hash::XxHash64;
 
 enum HashResult {
@@ -95,7 +92,7 @@ fn create_hasher(algo: &HashAlgorithm, seed: u64, file_size: u64) -> HasherInsta
     }
 }
 
-fn hash_file<'a>(
+pub fn hash_file<'a>(
     key: &'a GroupKey,
     dent: &'a AugDirEntry,
     options: &Options,
@@ -112,7 +109,6 @@ fn hash_file<'a>(
         f.read_exact(&mut buffer)?;
         hasher.hash_oneshot(&buffer)
     } else {
-        // Use streaming hashing for larger files
         let f = File::open(dent.dir_entry.path())?.take(options.hash_bytes);
         let buf_cap = options.hash_bytes.clamp(8_192, 524_288) as usize;
         let mut reader = BufReader::with_capacity(buf_cap, f);
@@ -122,29 +118,7 @@ fn hash_file<'a>(
     let hash = hash_result.format_as_string();
 
     if options.verbosity >= 2 {
-        debug!("Hashed: {} {}", dent.path().display(), hash);
+        tracing::debug!("Hashed: {} {}", dent.path().display(), hash);
     }
     Ok((dent, hash))
-}
-
-pub fn hash_key_group<'a>(
-    key: &'a GroupKey,
-    dents: &'a [AugDirEntry],
-    options: &Options,
-) -> HashMap<String, Vec<&'a AugDirEntry>> {
-    let hashes: Vec<Result<(&AugDirEntry, String), ()>> = dents
-        .par_iter()
-        .map(|dent| match hash_file(key, dent, options) {
-            Ok(v) => Ok(v),
-            Err(x) => {
-                error!("Unable to hash {:?}: {}", dent, x);
-                Err(())
-            }
-        })
-        .collect();
-    let mut hm: HashMap<String, Vec<&AugDirEntry>> = HashMap::new();
-    for (dent, hash) in hashes.into_iter().flatten() {
-        hm.entry(hash).or_default().push(dent)
-    }
-    hm
 }
