@@ -50,7 +50,7 @@ fn print_key_group_result(
         let common_prefix = hg
             .files
             .iter()
-            .map(|path| path.as_str())
+            .map(|tp| tp.path.as_str())
             .reduce(|a, b| {
                 let min_len = a.len().min(b.len());
                 let mut i = 0;
@@ -61,14 +61,14 @@ fn print_key_group_result(
             })
             .unwrap_or("");
 
-        for path in &hg.files {
+        for tp in &hg.files {
             if common_prefix.len() > 1 {
                 stream.set_color(ColorSpec::new().set_dimmed(true))?;
                 write!(stream, "{common_prefix}")?;
                 stream.reset()?;
-                writeln!(stream, "{}", &path[common_prefix.len()..])?;
+                writeln!(stream, "{}", &tp.path[common_prefix.len()..])?;
             } else {
-                writeln!(stream, "{path}")?;
+                writeln!(stream, "{}", tp.path)?;
             }
         }
         writeln!(stream)?;
@@ -90,10 +90,13 @@ fn print_stage_duration(label: &str, hash_stats: &HashStats, d: Duration) {
     );
 }
 
-fn print_duplicate_info(key_group_results: &[KeyGroupResult]) {
+fn print_duplicate_info(key_group_results: &[KeyGroupResult], elide_same_tag_groups: bool) {
     let mut n_duplicate_files: u64 = 0;
     let mut n_bytes_wasted: u64 = 0;
     for kgr in key_group_results.iter() {
+        if elide_same_tag_groups && !kgr.cross_tag {
+            continue;
+        }
         for hg in &kgr.hash_groups {
             if hg.files.len() > 1 {
                 let n = (hg.files.len() - 1) as u64;
@@ -218,24 +221,30 @@ fn main() -> anyhow::Result<()> {
         HumanBytes(hash_stats.n_bytes),
     );
     let hash_start_time = Instant::now();
+    let tag_names = options.tag_names.clone();
+    let elide_same_tag_groups = options.elide_same_tag_groups;
     let key_group_results = hashwork::do_hash(options, by_key)?;
     hash_stats.interrupted = check_and_reset_interrupt();
     print_stage_duration("Hashing", &hash_stats, hash_start_time.elapsed());
     let output_start_time = Instant::now();
     maybe_write_report(&report_human, |stream| {
         for kgr in key_group_results.iter() {
+            if elide_same_tag_groups && !kgr.cross_tag {
+                continue;
+            }
             print_key_group_result(stream, kgr).unwrap();
         }
     });
     maybe_write_report(&report_json, |stream| {
         let gr = GrandResult {
+            tag_names: tag_names.clone(),
             find_stats: &find_stats,
             hash_stats: &hash_stats,
             key_groups: &key_group_results,
         };
         serde_json::to_writer_pretty(stream, &gr).unwrap();
     });
-    print_duplicate_info(&key_group_results);
+    print_duplicate_info(&key_group_results, elide_same_tag_groups);
     print_stage_duration("Output", &hash_stats, output_start_time.elapsed());
     print_stage_duration("Finished", &hash_stats, start_time.elapsed());
     Ok(())

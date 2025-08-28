@@ -1,7 +1,9 @@
 use crate::cli_options::{CliOptions, HashAlgorithm, NameGroupingOption, ReportOption};
 use crate::parse_size::parse_size_string;
 use clap::Parser;
+use fdf::options::DirectorySpec;
 use fdf::Options as CoreOptions;
+use std::collections::HashMap;
 use std::result::Result;
 
 fn read_report_option(value: &Option<String>) -> ReportOption {
@@ -28,8 +30,12 @@ fn parse_size(value: &str) -> anyhow::Result<u64, String> {
 #[command(about = "Fast file duplicate finder")]
 pub struct Args {
     /// Add directory to search
-    #[arg(short = 'd', long = "directory", required = true)]
+    #[arg(short = 'd', long = "directory")]
     pub directory: Vec<String>,
+
+    /// Add directory to search, with the given tag
+    #[arg(long = "tagged-directory", visible_alias = "td", value_names = &["TAG", "DIR"], number_of_values = 2)]
+    pub tagged_directory: Vec<String>,
 
     /// Sets the level of verbosity
     #[arg(short = 'v', long = "verbose", action = clap::ArgAction::Count)]
@@ -90,6 +96,10 @@ pub struct Args {
     /// Number of threads for hashing files within each group (default: number of CPUs)
     #[arg(long = "file-hash-threads")]
     pub file_hash_threads: Option<usize>,
+
+    /// Elide groups where all files have the same directory tag
+    #[arg(long = "elide-same-tag-groups")]
+    pub elide_same_tag_groups: bool,
 }
 
 pub fn parse_args() -> anyhow::Result<(CoreOptions, CliOptions)> {
@@ -106,8 +116,37 @@ pub fn parse_args() -> anyhow::Result<(CoreOptions, CliOptions)> {
         .unwrap_or(4);
     let file_hash_threads = args.file_hash_threads.unwrap_or(n_cpus);
 
+    let mut tag_to_index: HashMap<String, u8> = HashMap::new();
+    let mut tag_names: Vec<String> = vec!["".to_string()];
+
+    let mut directories: Vec<DirectorySpec> = Vec::new();
+    for dir in args.directory.into_iter() {
+        directories.push(DirectorySpec {
+            tag_index: 0,
+            path: dir,
+        });
+    }
+
+    for pair in args.tagged_directory.chunks_exact(2) {
+        let tag = &pair[0];
+        let dir = &pair[1];
+        let tag_index = if let Some(&index) = tag_to_index.get(tag) {
+            index
+        } else {
+            let index = tag_names.len() as u8;
+            tag_to_index.insert(tag.clone(), index);
+            tag_names.push(tag.clone());
+            index
+        };
+        directories.push(DirectorySpec {
+            tag_index,
+            path: dir.clone(),
+        });
+    }
+
     let core_options = CoreOptions {
-        directories: args.directory,
+        directories,
+        tag_names,
         file_include_regexes,
         file_exclude_regexes,
         dir_include_regexes,
@@ -120,6 +159,7 @@ pub fn parse_args() -> anyhow::Result<(CoreOptions, CliOptions)> {
         min_size: args.min_size,
         max_size: args.max_size,
         file_hash_threads,
+        elide_same_tag_groups: args.elide_same_tag_groups,
     };
 
     let report_json = read_report_option(&args.report_json);

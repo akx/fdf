@@ -11,6 +11,7 @@ use walkdir::{DirEntry, WalkDir};
 #[derive(Clone, Debug)]
 pub struct AugDirEntry {
     pub dir_entry: DirEntry,
+    pub tag_index: u8,
     pub size: u64,
 }
 
@@ -78,9 +79,9 @@ pub fn find_files(
     let by_key_and_path: KeyToStringToDentMap = options
         .directories
         .iter()
-        .map(|dir| {
+        .map(|ds| {
             let mut by_key_and_path: KeyToStringToDentMap = HashMap::new();
-            let walker = WalkDir::new(dir).into_iter();
+            let walker = WalkDir::new(&ds.path).into_iter();
             for er in walker.filter_entry(|entry| options.is_entry_included(entry)) {
                 if is_interrupted() {
                     break;
@@ -113,6 +114,7 @@ pub fn find_files(
                 let aug_entry = AugDirEntry {
                     dir_entry: entry,
                     size,
+                    tag_index: ds.tag_index,
                 };
                 let key = group_key(options, &aug_entry);
                 let by_path = by_key_and_path.entry(key).or_default();

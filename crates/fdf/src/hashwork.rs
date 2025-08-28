@@ -1,8 +1,10 @@
 use crate::hash::hash_file;
 use crate::interrupt::is_interrupted;
+use crate::output::TaggedPath;
 use crate::{AugDirEntry, GroupKey, HashGroupResult};
 use crate::{KeyGroupResult, KeyToDentsMap, Options};
 use anyhow::Context;
+use bit_set::BitSet;
 use crossbeam::channel::{unbounded, Receiver, Sender};
 use indicatif::{ProgressBar, ProgressStyle};
 use std::collections::HashMap;
@@ -181,13 +183,20 @@ pub fn do_hash(
 
     for (key, file_hashes) in results.into_iter() {
         // Consume results into hash groups
-        let mut hash_groups: HashMap<String, Vec<AugDirEntry>> = HashMap::new();
+        let mut hash_to_group: HashMap<String, Vec<TaggedPath>> = HashMap::new();
+        let mut tag_indices_seen = BitSet::new();
         let mut n_files = 0;
         let mut n_errors = 0;
+
         for (dent, result) in file_hashes {
             match result {
                 Ok(hash) => {
-                    hash_groups.entry(hash).or_default().push(dent);
+                    let tagged_path = TaggedPath {
+                        tag_index: dent.tag_index,
+                        path: dent.dir_entry.path().to_str().unwrap().to_string(),
+                    };
+                    tag_indices_seen.insert(dent.tag_index as usize);
+                    hash_to_group.entry(hash).or_default().push(tagged_path);
                     n_files += 1;
                 }
                 Err(_) => {
@@ -196,23 +205,29 @@ pub fn do_hash(
             }
         }
 
+        let cross_tag = tag_indices_seen.len() > 1;
+        let mut hash_groups = Vec::with_capacity(hash_to_group.len());
+
+        for (hash, mut files) in hash_to_group {
+            files.sort_unstable_by(|a, b| {
+                if a.tag_index == b.tag_index {
+                    a.path.cmp(&b.path)
+                } else {
+                    a.tag_index.cmp(&b.tag_index)
+                }
+            });
+
+            hash_groups.push(HashGroupResult { hash, files });
+        }
+
         let result = KeyGroupResult {
             size: key.size,
             identifier: key.extension.to_string(),
-            hash_groups: hash_groups
-                .into_iter()
-                .map(|(hash, dents)| {
-                    let mut files: Vec<String> = dents
-                        .into_iter()
-                        .map(|dent| dent.path().to_str().unwrap().to_string())
-                        .collect();
-                    files.sort_unstable();
-                    HashGroupResult { hash, files }
-                })
-                .collect(),
+            hash_groups,
             n_files,
             n_errors,
             complete: n_files + n_errors == *group_expected_counts.get(&key).unwrap(),
+            cross_tag,
         };
         key_group_results.push(result);
     }
