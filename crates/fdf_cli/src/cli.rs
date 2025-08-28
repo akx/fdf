@@ -40,7 +40,7 @@ pub struct Args {
     pub hash_bytes: u64,
 
     /// File size threshold for oneshot hashing (avoids streaming for small files)
-    #[arg(long = "hash-oneshot-size", value_parser = parse_size, default_value = "64KiB")]
+    #[arg(long = "hash-oneshot-size", value_parser = parse_size, default_value = "64k")]
     pub hash_oneshot_size: u64,
 
     /// Select a hash algorithm; there are speed/quality tradeoffs
@@ -86,6 +86,10 @@ pub struct Args {
     /// Maximum file size to consider
     #[arg(long = "max-size", value_parser = parse_size, default_value = "18446744073709551615", hide_default_value = true)]
     pub max_size: u64,
+
+    /// Number of threads for hashing files within each group (default: number of CPUs)
+    #[arg(long = "file-hash-threads")]
+    pub file_hash_threads: Option<usize>,
 }
 
 pub fn parse_args() -> anyhow::Result<(CoreOptions, CliOptions)> {
@@ -95,6 +99,12 @@ pub fn parse_args() -> anyhow::Result<(CoreOptions, CliOptions)> {
     let file_include_regexes = parse_regex_set(args.file_include_re)?;
     let dir_exclude_regexes = parse_regex_set(args.dir_exclude_re)?;
     let dir_include_regexes = parse_regex_set(args.dir_include_re)?;
+
+    // Use system CPU count as default for file hash threads
+    let n_cpus = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(4);
+    let file_hash_threads = args.file_hash_threads.unwrap_or(n_cpus);
 
     let core_options = CoreOptions {
         directories: args.directory,
@@ -109,6 +119,7 @@ pub fn parse_args() -> anyhow::Result<(CoreOptions, CliOptions)> {
         name_grouping: args.name_grouping.into(),
         min_size: args.min_size,
         max_size: args.max_size,
+        file_hash_threads,
     };
 
     let report_json = read_report_option(&args.report_json);

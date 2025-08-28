@@ -29,6 +29,7 @@ pub struct Options {
     pub name_grouping: NameGroupingOption,
     pub min_size: u64,
     pub max_size: u64,
+    pub file_hash_threads: usize,
 }
 
 impl Options {

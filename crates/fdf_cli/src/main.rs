@@ -6,12 +6,11 @@ use crate::cli::parse_args;
 use crate::cli_options::{CliOptions, ReportOption};
 use fdf::{
     find::KeyToStringToDentMap,
-    interrupt::{check_and_reset_interrupt, is_interrupted, set_interrupted},
-    AugDirEntry, GrandResult, GroupKey, HashGroupResult, HashStats, KeyGroupResult, KeyToDentsMap,
-    Options,
+    hashwork,
+    interrupt::{check_and_reset_interrupt, set_interrupted},
+    GrandResult, HashStats, KeyGroupResult,
 };
-use indicatif::{HumanBytes, ProgressBar, ProgressStyle};
-use rayon::prelude::*;
+use indicatif::HumanBytes;
 use std::error::Error;
 use std::fs::File;
 use std::io::{stdout, Write};
@@ -19,24 +18,6 @@ use std::process::exit;
 use std::time::{Duration, Instant};
 use termcolor::{Color, ColorChoice, ColorSpec, NoColor, StandardStream, WriteColor};
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
-
-fn process_key_group(key: &GroupKey, dents: &[AugDirEntry], options: &Options) -> KeyGroupResult {
-    KeyGroupResult {
-        size: key.size,
-        identifier: key.extension.to_string(),
-        hash_groups: fdf::hash::hash_key_group(key, dents, options)
-            .iter()
-            .map(|(hash, dents)| HashGroupResult {
-                hash: hash.to_string(),
-                files: dents
-                    .iter()
-                    .map(|dent| dent.path().to_str().unwrap().to_string())
-                    .collect(),
-            })
-            .collect(),
-        n_files: dents.len() as u64,
-    }
-}
 
 fn print_key_group_result(
     stream: &mut dyn WriteColor,
@@ -93,34 +74,6 @@ fn print_key_group_result(
         writeln!(stream)?;
     }
     Ok(())
-}
-
-fn do_hash(core_options: &Options, by_key: KeyToDentsMap) -> Vec<KeyGroupResult> {
-    let mut sorted_pairs = by_key
-        .iter()
-        .collect::<Vec<(&GroupKey, &Vec<AugDirEntry>)>>();
-    sorted_pairs.sort_unstable_by(|(ka, _), (kb, _)| kb.size.cmp(&ka.size));
-    let prog = ProgressBar::new(sorted_pairs.len() as u64);
-    prog.set_style(
-        ProgressStyle::default_bar()
-            .template("{pos:>6}/{len:6} {msg} (ETA {eta}) {wide_bar}")
-            .unwrap(),
-    );
-
-    let key_group_results: Vec<KeyGroupResult> = sorted_pairs
-        .par_iter()
-        .map(|(key, dents)| {
-            if is_interrupted() {
-                return None;
-            }
-            prog.set_message(format!("{}/{}", key.extension, key.size));
-            prog.inc(1);
-            Some(process_key_group(key, dents, core_options))
-        })
-        .filter_map(|x| x)
-        .collect();
-    prog.finish();
-    key_group_results
 }
 
 fn print_stage_duration(label: &str, hash_stats: &HashStats, d: Duration) {
@@ -224,7 +177,7 @@ fn init_tracing(verbosity: u8) {
         .init();
 }
 
-fn main() {
+fn main() -> anyhow::Result<()> {
     let (options, cli_options) = parse_args().unwrap_or_else(|err| {
         eprintln!("{err}");
         exit(1);
@@ -265,7 +218,7 @@ fn main() {
         HumanBytes(hash_stats.n_bytes),
     );
     let hash_start_time = Instant::now();
-    let key_group_results = do_hash(&options, by_key);
+    let key_group_results = hashwork::do_hash(options, by_key)?;
     hash_stats.interrupted = check_and_reset_interrupt();
     print_stage_duration("Hashing", &hash_stats, hash_start_time.elapsed());
     let output_start_time = Instant::now();
@@ -285,4 +238,5 @@ fn main() {
     print_duplicate_info(&key_group_results);
     print_stage_duration("Output", &hash_stats, output_start_time.elapsed());
     print_stage_duration("Finished", &hash_stats, start_time.elapsed());
+    Ok(())
 }

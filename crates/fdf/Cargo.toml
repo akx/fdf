@@ -6,11 +6,12 @@ edition.workspace = true
 description = "Fast file duplicate finder core library"
 
 [dependencies]
+anyhow.workspace = true
 blake3 = "1.8.2"
+crossbeam = "0.8.4"
 hex = "0.4.3"
 indicatif = "0.18.0"
 lazy_static.workspace = true
-rayon.workspace = true
 regex.workspace = true
 serde.workspace = true
 sha2 = { version = "0.10.9", features = ["asm"] }
