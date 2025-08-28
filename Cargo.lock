@@ -330,7 +330,6 @@ dependencies = [
  "blake3",
  "crossbeam",
  "hex",
- "indicatif",
  "lazy_static",
  "regex",
  "serde",

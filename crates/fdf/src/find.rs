@@ -1,7 +1,7 @@
 use crate::interrupt::{check_and_reset_interrupt, is_interrupted};
 use crate::options::{NameGroupingOption, Options};
 use crate::output::{FindStats, HashStats};
-use indicatif::{HumanBytes, ProgressBar};
+use crate::progress::{ProgressCallback, ProgressEvent};
 use std::collections::HashMap;
 use std::path::Path;
 use string_cache::DefaultAtom as Atom;
@@ -66,71 +66,64 @@ fn calculate_hash_stats(by_key: &KeyToDentsMap) -> HashStats {
 pub fn find_files(
     options: &Options,
     return_precull: bool,
+    on_progress: ProgressCallback,
 ) -> (
     FindStats,
     HashStats,
     KeyToDentsMap,
     Option<KeyToStringToDentMap>,
 ) {
-    let prog = ProgressBar::new_spinner();
+    on_progress(ProgressEvent::FindStarted);
     let mut n_dirs: u64 = 0;
     let mut n_files: u64 = 0;
     let mut n_bytes: u64 = 0;
-    let by_key_and_path: KeyToStringToDentMap = options
-        .directories
-        .iter()
-        .map(|ds| {
-            let mut by_key_and_path: KeyToStringToDentMap = HashMap::new();
-            let walker = WalkDir::new(&ds.path).into_iter();
-            for er in walker.filter_entry(|entry| options.is_entry_included(entry)) {
-                if is_interrupted() {
-                    break;
-                }
-                let entry = match er {
-                    Ok(entry) => entry,
-                    Err(err) => {
-                        error!("[!] {}", err);
-                        continue;
-                    }
-                };
-                if entry.file_type().is_dir() {
-                    n_dirs += 1;
-                    continue;
-                }
-                // TODO: Process symlinks gracefully
-                if entry.file_type().is_symlink() {
-                    continue;
-                }
-                let size = entry.metadata().unwrap().len();
-                if size == 0 || size < options.min_size || size > options.max_size {
-                    continue;
-                }
-                n_files += 1;
-                n_bytes += size;
-                if options.verbosity >= 3 {
-                    debug!("Found: {}", entry.path().display());
-                }
-                let path_str = entry.path().to_str().unwrap().to_string();
-                let aug_entry = AugDirEntry {
-                    dir_entry: entry,
-                    size,
-                    tag_index: ds.tag_index,
-                };
-                let key = group_key(options, &aug_entry);
-                let by_path = by_key_and_path.entry(key).or_default();
-                by_path.insert(path_str, aug_entry);
-                let size = HumanBytes(n_bytes).to_string();
-                prog.set_message(format!("{n_dirs} dirs, {n_files} files, {size}..."));
-                prog.inc(1);
+    let mut by_key_and_path: KeyToStringToDentMap = HashMap::new();
+    for ds in options.directories.iter() {
+        let walker = WalkDir::new(&ds.path).into_iter();
+        for er in walker.filter_entry(|entry| options.is_entry_included(entry)) {
+            if is_interrupted() {
+                break;
             }
-            by_key_and_path
-        })
-        .fold(HashMap::new(), |mut accmap, map| {
-            for (key, ents) in map {
-                accmap.entry(key).or_default().extend(ents);
+            let entry = match er {
+                Ok(entry) => entry,
+                Err(err) => {
+                    error!("[!] {}", err);
+                    continue;
+                }
+            };
+            if entry.file_type().is_dir() {
+                n_dirs += 1;
+                continue;
             }
-            accmap
-        });
+            // TODO: Process symlinks gracefully
+            if entry.file_type().is_symlink() {
+                continue;
+            }
+            let size = entry.metadata().unwrap().len();
+            if size == 0 || size < options.min_size || size > options.max_size {
+                continue;
+            }
+            n_files += 1;
+            n_bytes += size;
+            if options.verbosity >= 3 {
+                debug!("Found: {}", entry.path().display());
+            }
+            let path_str = entry.path().to_str().unwrap().to_string();
+            let aug_entry = AugDirEntry {
+                dir_entry: entry,
+                size,
+                tag_index: ds.tag_index,
+            };
+            let key = group_key(options, &aug_entry);
+            let by_path = by_key_and_path.entry(key).or_default();
+            by_path.insert(path_str, aug_entry);
+            on_progress(ProgressEvent::FindProgress {
+                n_dirs,
+                n_files,
+                n_bytes,
+            });
+        }
+    }
     let mut by_key: KeyToDentsMap = HashMap::new();
     let find_stats = FindStats {
         interrupted: check_and_reset_interrupt(),
@@ -144,9 +137,9 @@ pub fn find_files(
             by_key.insert(key.clone(), ent_map.values().cloned().collect());
         }
     }
-    prog.set_message("Calculating statistics...");
+    on_progress(ProgressEvent::CalculatingStats { n_files });
     let hash_stats = calculate_hash_stats(&by_key);
-    prog.finish_and_clear();
+    on_progress(ProgressEvent::FindFinished);
     (
         find_stats,
         hash_stats,

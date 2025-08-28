@@ -1,12 +1,12 @@
 use crate::hash::hash_file;
 use crate::interrupt::is_interrupted;
 use crate::output::TaggedPath;
+use crate::progress::{ProgressCallback, ProgressEvent};
 use crate::{AugDirEntry, GroupKey, HashGroupResult};
 use crate::{KeyGroupResult, KeyToDentsMap, Options};
 use anyhow::Context;
 use bit_set::BitSet;
 use crossbeam::channel::{unbounded, Receiver, Sender};
-use indicatif::{ProgressBar, ProgressStyle};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::thread;
@@ -80,18 +80,19 @@ pub fn hash_worker(params: WorkerParams) {
 pub fn do_hash(
     core_options: Options,
     by_key: KeyToDentsMap,
+    on_progress: ProgressCallback,
 ) -> anyhow::Result<Vec<KeyGroupResult>> {
     let mut sorted_pairs = by_key
         .into_iter()
         .collect::<Vec<(GroupKey, Vec<AugDirEntry>)>>();
     sorted_pairs.sort_unstable_by(|(ka, _), (kb, _)| kb.size.cmp(&ka.size));
 
-    // Count total files for progress bar
-    let total_files: usize = sorted_pairs.iter().map(|(_, dents)| dents.len()).sum();
-    let prog = ProgressBar::new(total_files as u64);
-    prog.set_style(
-        ProgressStyle::default_bar().template("{pos:>6}/{len:6} {msg} (ETA {eta}) {wide_bar}")?,
-    );
+    // Count total files for progress reporting
+    let total_files = sorted_pairs
+        .iter()
+        .map(|(_, dents)| dents.len() as u64)
+        .sum();
+    on_progress(ProgressEvent::HashStarted { total_files });
 
     let shared_options = Arc::new(core_options);
     let (job_sender, job_receiver) = unbounded();
@@ -117,7 +118,7 @@ pub fn do_hash(
     for (key, dents) in &sorted_pairs {
         group_expected_counts.insert((*key).clone(), dents.len() as u64);
     }
-    let total_groups = group_expected_counts.len();
+    let total_groups = group_expected_counts.len() as u64;
 
     // Producer: Send jobs in priority order (largest groups first)
     for (key, dents) in sorted_pairs {
@@ -139,8 +140,8 @@ pub fn do_hash(
     }
 
     let mut results: HashMap<GroupKey, Vec<(AugDirEntry, Result<String, String>)>> = HashMap::new();
-    let mut processed_files = 0;
-    let mut completed_groups = 0;
+    let mut processed_files: u64 = 0;
+    let mut completed_groups: u64 = 0;
 
     loop {
         match result_receiver.recv() {
@@ -157,8 +158,12 @@ pub fn do_hash(
                     completed_groups += 1;
                 }
 
-                prog.set_position(processed_files as u64);
-                prog.set_message(format!("{completed_groups}/{total_groups} groups complete",));
+                on_progress(ProgressEvent::HashProgress {
+                    processed_files,
+                    total_files,
+                    completed_groups,
+                    total_groups,
+                });
 
                 if is_interrupted() {
                     break;
@@ -177,7 +182,7 @@ pub fn do_hash(
         }
     }
 
-    prog.finish();
+    on_progress(ProgressEvent::HashFinished);
 
     let mut key_group_results = Vec::new();
 

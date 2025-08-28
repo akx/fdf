@@ -199,8 +199,29 @@ fn main() -> anyhow::Result<()> {
     }
     configure_interrupt();
     let start_time = Instant::now();
-    let (find_stats, mut hash_stats, by_key, precull_files) =
-        fdf::find::find_files(&options, report_file_list != ReportOption::None);
+
+    let find_progress = indicatif::ProgressBar::new_spinner();
+    find_progress.enable_steady_tick(Duration::from_millis(500));
+    let (find_stats, mut hash_stats, by_key, precull_files) = fdf::find::find_files(
+        &options,
+        report_file_list != ReportOption::None,
+        &mut |event| {
+            if let fdf::ProgressEvent::FindProgress {
+                n_dirs,
+                n_files,
+                n_bytes,
+            } = event
+            {
+                find_progress.set_message(format!(
+                    "Finding files... (dirs: {}, files: {}, {})",
+                    n_dirs,
+                    n_files,
+                    HumanBytes(n_bytes)
+                ));
+            }
+        },
+    );
+    find_progress.finish_and_clear();
     eprintln!(
         "Found {} files in {} directories ({} groups before culling) in {:.2} s, {}.",
         find_stats.n_files,
@@ -223,7 +244,33 @@ fn main() -> anyhow::Result<()> {
     let hash_start_time = Instant::now();
     let tag_names = options.tag_names.clone();
     let elide_same_tag_groups = options.elide_same_tag_groups;
-    let key_group_results = hashwork::do_hash(options, by_key)?;
+
+    let hash_progress = indicatif::ProgressBar::new(hash_stats.n_groups);
+    hash_progress.set_style(
+        indicatif::ProgressStyle::with_template(
+            "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} {msg}",
+        )?
+        .progress_chars("#>-"),
+    );
+    let key_group_results = hashwork::do_hash(options, by_key, &mut |event| match event {
+        fdf::ProgressEvent::HashStarted { total_files } => {
+            hash_progress.set_length(total_files);
+            hash_progress.set_position(0);
+        }
+        fdf::ProgressEvent::HashProgress {
+            processed_files,
+            total_files,
+            completed_groups,
+            total_groups,
+        } => {
+            hash_progress.set_message(format!(
+                "{processed_files}/{total_files} files scanned, {completed_groups}/{total_groups} groups complete"
+            ));
+            hash_progress.set_position(processed_files);
+        }
+        _ => {}
+    })?;
+    hash_progress.finish_and_clear();
     hash_stats.interrupted = check_and_reset_interrupt();
     print_stage_duration("Hashing", &hash_stats, hash_start_time.elapsed());
     let output_start_time = Instant::now();
