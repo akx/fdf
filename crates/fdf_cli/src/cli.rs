@@ -36,8 +36,8 @@ pub struct Args {
     pub verbose: u8,
 
     /// Hash N first bytes only
-    #[arg(short = 'b', long = "hash-bytes", value_parser = parse_size, default_value = "18446744073709551615", hide_default_value = true)]
-    pub hash_bytes: u64,
+    #[arg(short = 'b', long = "hash-bytes", value_parser = parse_size)]
+    pub hash_bytes: Option<u64>,
 
     /// File size threshold for oneshot hashing (avoids streaming for small files)
     #[arg(long = "hash-oneshot-size", value_parser = parse_size, default_value = "64k")]
