@@ -16,8 +16,15 @@ pub enum NameGroupingOption {
 }
 
 #[derive(Debug)]
+pub struct DirectorySpec {
+    pub tag_index: u8,
+    pub path: String,
+}
+
+#[derive(Debug)]
 pub struct Options {
-    pub directories: Vec<String>,
+    pub tag_names: Vec<String>,
+    pub directories: Vec<DirectorySpec>,
     pub file_include_regexes: RegexSet,
     pub file_exclude_regexes: RegexSet,
     pub dir_include_regexes: RegexSet,
@@ -30,6 +37,7 @@ pub struct Options {
     pub min_size: u64,
     pub max_size: u64,
     pub file_hash_threads: usize,
+    pub elide_same_tag_groups: bool,
 }
 
 impl Options {
