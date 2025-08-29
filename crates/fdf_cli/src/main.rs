@@ -4,6 +4,7 @@ mod parse_size;
 
 use crate::cli::parse_args;
 use crate::cli_options::{CliOptions, ReportOption};
+use fdf::find::{calculate_hash_stats, FindFilesResult};
 use fdf::{
     find::KeyToStringToDentMap, hashwork, GrandResult, HashStats, InterruptHandle, KeyGroupResult,
 };
@@ -75,8 +76,8 @@ fn print_key_group_result(
 
 fn print_stage_duration(label: &str, hash_stats: &HashStats, d: Duration) {
     let time = d.as_secs_f32();
-    let files_per_sec = (hash_stats.n_files as f32 / time) as u32;
-    let bytes_per_sec = ((hash_stats.n_bytes) as f32 / time) as u32;
+    let files_per_sec = hash_stats.n_files as f32 / time;
+    let bytes_per_sec = hash_stats.n_bytes as f32 / time;
 
     eprintln!(
         "{}: {} seconds ({} files/sec, {}/sec).",
@@ -196,10 +197,13 @@ fn main() -> anyhow::Result<()> {
     }
     configure_interrupt(options.interrupt_handle.clone());
     let start_time = Instant::now();
-
     let find_progress = indicatif::ProgressBar::new_spinner();
     find_progress.enable_steady_tick(Duration::from_millis(500));
-    let (find_stats, mut hash_stats, by_key, precull_files) = fdf::find::find_files(
+    let FindFilesResult {
+        find_stats,
+        by_key,
+        precull_files,
+    } = fdf::find::find_files(
         &options,
         report_file_list != ReportOption::None,
         &mut |event| {
@@ -217,14 +221,14 @@ fn main() -> anyhow::Result<()> {
                 ));
             }
         },
-    );
+    )?;
     find_progress.finish_and_clear();
     eprintln!(
         "Found {} files in {} directories ({} groups before culling) in {:.2} s, {}.",
         find_stats.n_files,
         find_stats.n_dirs,
         find_stats.n_precull_groups,
-        start_time.elapsed().as_secs_f32(),
+        find_stats.duration.unwrap().as_secs_f32(),
         HumanBytes(find_stats.n_bytes),
     );
     if let Some(precull_files) = precull_files {
@@ -232,25 +236,24 @@ fn main() -> anyhow::Result<()> {
             print_file_list(stream, &precull_files);
         });
     }
+    let mut hash_stats = calculate_hash_stats(&by_key);
     eprintln!(
         "Hashing {} groups, {} files, {}.",
         hash_stats.n_groups,
         hash_stats.n_files,
         HumanBytes(hash_stats.n_bytes),
     );
-    let hash_start_time = Instant::now();
     let tag_names = options.tag_names.clone();
     let elide_same_tag_groups = options.elide_same_tag_groups;
-    let interrupt_handle = options.interrupt_handle.clone();
 
     let hash_progress = indicatif::ProgressBar::new(hash_stats.n_groups);
     hash_progress.set_style(
         indicatif::ProgressStyle::with_template(
-            "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} {msg}",
+            "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {msg}",
         )?
         .progress_chars("#>-"),
     );
-    let key_group_results = hashwork::do_hash(options, by_key, &mut |event| match event {
+    let hash_result = hashwork::do_hash(options, by_key, &mut |event| match event {
         fdf::ProgressEvent::HashStarted { total_files } => {
             hash_progress.set_length(total_files);
             hash_progress.set_position(0);
@@ -268,9 +271,11 @@ fn main() -> anyhow::Result<()> {
         }
         _ => {}
     })?;
+    hash_stats.duration = hash_result.duration;
+    hash_stats.interrupted = hash_result.interrupted;
     hash_progress.finish_and_clear();
-    hash_stats.interrupted = interrupt_handle.check_and_reset_interrupt();
-    print_stage_duration("Hashing", &hash_stats, hash_start_time.elapsed());
+    print_stage_duration("Hashing", &hash_stats, hash_stats.duration.unwrap());
+    let key_group_results = hash_result.key_group_results;
     let output_start_time = Instant::now();
     maybe_write_report(&report_human, |stream| {
         for kgr in key_group_results.iter() {
