@@ -1,3 +1,4 @@
+use crate::interrupt::InterruptHandle;
 use regex::RegexSet;
 use walkdir::DirEntry;
 
@@ -38,6 +39,7 @@ pub struct Options {
     pub max_size: u64,
     pub file_hash_threads: usize,
     pub elide_same_tag_groups: bool,
+    pub interrupt_handle: InterruptHandle,
 }
 
 impl Options {

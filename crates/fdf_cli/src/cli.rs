@@ -160,6 +160,7 @@ pub fn parse_args() -> anyhow::Result<(CoreOptions, CliOptions)> {
         max_size: args.max_size,
         file_hash_threads,
         elide_same_tag_groups: args.elide_same_tag_groups,
+        interrupt_handle: fdf::InterruptHandle::new(),
     };
 
     let report_json = read_report_option(&args.report_json);

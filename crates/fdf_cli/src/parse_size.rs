@@ -1,10 +1,9 @@
-use lazy_static::lazy_static;
 use regex::Regex;
+use std::sync::LazyLock;
+
+static RE: LazyLock<Regex> = LazyLock::new(|| Regex::new("^([0-9.]+)\\s*([kmg])?$").unwrap());
 
 pub fn parse_size_string(s: &str) -> anyhow::Result<u64> {
-    lazy_static! {
-        static ref RE: Regex = Regex::new("^([0-9.]+)\\s*([kmg])?$").unwrap();
-    }
     let lows = s.to_ascii_lowercase();
     let captures = RE
         .captures(&lows)

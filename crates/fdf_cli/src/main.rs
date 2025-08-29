@@ -5,10 +5,7 @@ mod parse_size;
 use crate::cli::parse_args;
 use crate::cli_options::{CliOptions, ReportOption};
 use fdf::{
-    find::KeyToStringToDentMap,
-    hashwork,
-    interrupt::{check_and_reset_interrupt, set_interrupted},
-    GrandResult, HashStats, KeyGroupResult,
+    find::KeyToStringToDentMap, hashwork, GrandResult, HashStats, InterruptHandle, KeyGroupResult,
 };
 use indicatif::HumanBytes;
 use std::error::Error;
@@ -148,10 +145,10 @@ where
     };
 }
 
-fn configure_interrupt() {
+fn configure_interrupt(interrupt_handle: InterruptHandle) {
     ctrlc::set_handler(move || {
         eprintln!("received Ctrl+C!");
-        set_interrupted();
+        interrupt_handle.set_interrupted();
     })
     .unwrap_or_else(|e| eprintln!("Error setting Ctrl-C handler: {e}"));
 }
@@ -197,7 +194,7 @@ fn main() -> anyhow::Result<()> {
         eprintln!("No output arguments set; assuming human output to stdout desired.");
         report_human = ReportOption::Stdout;
     }
-    configure_interrupt();
+    configure_interrupt(options.interrupt_handle.clone());
     let start_time = Instant::now();
 
     let find_progress = indicatif::ProgressBar::new_spinner();
@@ -244,6 +241,7 @@ fn main() -> anyhow::Result<()> {
     let hash_start_time = Instant::now();
     let tag_names = options.tag_names.clone();
     let elide_same_tag_groups = options.elide_same_tag_groups;
+    let interrupt_handle = options.interrupt_handle.clone();
 
     let hash_progress = indicatif::ProgressBar::new(hash_stats.n_groups);
     hash_progress.set_style(
@@ -271,7 +269,7 @@ fn main() -> anyhow::Result<()> {
         _ => {}
     })?;
     hash_progress.finish_and_clear();
-    hash_stats.interrupted = check_and_reset_interrupt();
+    hash_stats.interrupted = interrupt_handle.check_and_reset_interrupt();
     print_stage_duration("Hashing", &hash_stats, hash_start_time.elapsed());
     let output_start_time = Instant::now();
     maybe_write_report(&report_human, |stream| {

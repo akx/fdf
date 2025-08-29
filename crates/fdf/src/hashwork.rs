@@ -1,5 +1,5 @@
 use crate::hash::hash_file;
-use crate::interrupt::is_interrupted;
+use crate::interrupt::InterruptHandle;
 use crate::output::TaggedPath;
 use crate::progress::{ProgressCallback, ProgressEvent};
 use crate::{AugDirEntry, GroupKey, HashGroupResult};
@@ -29,6 +29,7 @@ pub struct WorkerParams {
     pub job_receiver: Receiver<Job>,
     pub result_sender: Sender<HashResult>,
     pub options: Arc<Options>,
+    pub interrupt_handle: InterruptHandle,
 }
 
 pub fn hash_worker(params: WorkerParams) {
@@ -37,6 +38,7 @@ pub fn hash_worker(params: WorkerParams) {
         job_receiver,
         result_sender,
         options,
+        interrupt_handle,
     } = params;
 
     loop {
@@ -61,7 +63,7 @@ pub fn hash_worker(params: WorkerParams) {
                     return;
                 }
 
-                if is_interrupted() {
+                if interrupt_handle.is_interrupted() {
                     tracing::debug!("Worker {}: Interrupt noticed.", worker_id);
                     return;
                 }
@@ -108,6 +110,7 @@ pub fn do_hash(
             job_receiver: job_receiver.clone(),
             result_sender: result_sender.clone(),
             options: Arc::clone(&shared_options),
+            interrupt_handle: shared_options.interrupt_handle.clone(),
         };
         let handle = thread::spawn(move || hash_worker(worker_params));
         handles.push(handle);
@@ -123,7 +126,7 @@ pub fn do_hash(
     // Producer: Send jobs in priority order (largest groups first)
     for (key, dents) in sorted_pairs {
         for dent in dents {
-            if is_interrupted() {
+            if shared_options.interrupt_handle.is_interrupted() {
                 break;
             }
             job_sender
@@ -165,7 +168,7 @@ pub fn do_hash(
                     total_groups,
                 });
 
-                if is_interrupted() {
+                if shared_options.interrupt_handle.is_interrupted() {
                     break;
                 }
             }

@@ -1,4 +1,3 @@
-use crate::interrupt::{check_and_reset_interrupt, is_interrupted};
 use crate::options::{NameGroupingOption, Options};
 use crate::output::{FindStats, HashStats};
 use crate::progress::{ProgressCallback, ProgressEvent};
@@ -81,7 +80,7 @@ pub fn find_files(
     for ds in options.directories.iter() {
         let walker = WalkDir::new(&ds.path).into_iter();
         for er in walker.filter_entry(|entry| options.is_entry_included(entry)) {
-            if is_interrupted() {
+            if options.interrupt_handle.is_interrupted() {
                 break;
             }
             let entry = match er {
@@ -126,7 +125,7 @@ pub fn find_files(
     }
     let mut by_key: KeyToDentsMap = HashMap::new();
     let find_stats = FindStats {
-        interrupted: check_and_reset_interrupt(),
+        interrupted: options.interrupt_handle.check_and_reset_interrupt(),
         n_bytes,
         n_dirs,
         n_files,
