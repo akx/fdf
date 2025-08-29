@@ -10,6 +10,7 @@ use crossbeam::channel::{unbounded, Receiver, Sender};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::thread;
+use std::time::{Duration, Instant};
 
 #[derive(Debug)]
 pub enum Job {
@@ -18,7 +19,7 @@ pub enum Job {
 }
 
 #[derive(Debug)]
-pub struct HashResult {
+pub struct HashJobResult {
     pub key: GroupKey,
     pub dent: AugDirEntry,
     pub result: Result<String, String>,
@@ -27,7 +28,7 @@ pub struct HashResult {
 pub struct WorkerParams {
     pub worker_id: usize,
     pub job_receiver: Receiver<Job>,
-    pub result_sender: Sender<HashResult>,
+    pub result_sender: Sender<HashJobResult>,
     pub options: Arc<Options>,
     pub interrupt_handle: InterruptHandle,
 }
@@ -56,7 +57,7 @@ pub fn hash_worker(params: WorkerParams) {
                 };
 
                 if result_sender
-                    .send(HashResult { key, dent, result })
+                    .send(HashJobResult { key, dent, result })
                     .is_err()
                 {
                     tracing::error!("Worker {}: Unable to send result", worker_id);
@@ -79,11 +80,19 @@ pub fn hash_worker(params: WorkerParams) {
     }
 }
 
+pub struct HashResult {
+    pub key_group_results: Vec<KeyGroupResult>,
+    pub interrupted: bool,
+    pub duration: Option<Duration>,
+}
+
 pub fn do_hash(
-    core_options: Options,
+    options: Options,
     by_key: KeyToDentsMap,
     on_progress: ProgressCallback,
-) -> anyhow::Result<Vec<KeyGroupResult>> {
+) -> anyhow::Result<HashResult> {
+    let hash_start_time = Instant::now();
+    let interrupt_handle = options.interrupt_handle.clone();
     let mut sorted_pairs = by_key
         .into_iter()
         .collect::<Vec<(GroupKey, Vec<AugDirEntry>)>>();
@@ -96,7 +105,7 @@ pub fn do_hash(
         .sum();
     on_progress(ProgressEvent::HashStarted { total_files });
 
-    let shared_options = Arc::new(core_options);
+    let shared_options = Arc::new(options);
     let (job_sender, job_receiver) = unbounded();
     let (result_sender, result_receiver) = unbounded();
     let num_workers = shared_options.file_hash_threads;
@@ -149,7 +158,7 @@ pub fn do_hash(
     loop {
         match result_receiver.recv() {
             Ok(hash_result) => {
-                let HashResult { key, dent, result } = hash_result;
+                let HashJobResult { key, dent, result } = hash_result;
                 results.entry(key.clone()).or_default().push((dent, result));
                 processed_files += 1;
 
@@ -241,5 +250,9 @@ pub fn do_hash(
     }
     key_group_results.sort_unstable_by(|ka, kb| kb.size.cmp(&ka.size));
 
-    Ok(key_group_results)
+    Ok(HashResult {
+        key_group_results,
+        interrupted: interrupt_handle.check_and_reset_interrupt(),
+        duration: Some(hash_start_time.elapsed()),
+    })
 }

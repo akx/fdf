@@ -3,6 +3,7 @@ use crate::output::{FindStats, HashStats};
 use crate::progress::{ProgressCallback, ProgressEvent};
 use std::collections::HashMap;
 use std::path::Path;
+use std::time::Instant;
 use string_cache::DefaultAtom as Atom;
 use tracing::{debug, error};
 use walkdir::{DirEntry, WalkDir};
@@ -45,7 +46,7 @@ type StringToDentMap = HashMap<String, AugDirEntry>;
 pub type KeyToStringToDentMap = HashMap<GroupKey, StringToDentMap>;
 pub type KeyToDentsMap = HashMap<GroupKey, Vec<AugDirEntry>>;
 
-fn calculate_hash_stats(by_key: &KeyToDentsMap) -> HashStats {
+pub fn calculate_hash_stats(by_key: &KeyToDentsMap) -> HashStats {
     let (n_files, n_bytes) = by_key
         .values()
         .fold((0u64, 0u64), |(n_files, total_size), dents| {
@@ -59,29 +60,32 @@ fn calculate_hash_stats(by_key: &KeyToDentsMap) -> HashStats {
         n_files,
         n_bytes,
         n_groups: by_key.len() as u64,
+        duration: None,
     }
+}
+
+pub struct FindFilesResult {
+    pub find_stats: FindStats,
+    pub by_key: KeyToDentsMap,
+    pub precull_files: Option<KeyToStringToDentMap>,
 }
 
 pub fn find_files(
     options: &Options,
     return_precull: bool,
     on_progress: ProgressCallback,
-) -> (
-    FindStats,
-    HashStats,
-    KeyToDentsMap,
-    Option<KeyToStringToDentMap>,
-) {
+) -> anyhow::Result<FindFilesResult> {
     on_progress(ProgressEvent::FindStarted);
     let mut n_dirs: u64 = 0;
     let mut n_files: u64 = 0;
     let mut n_bytes: u64 = 0;
     let mut by_key_and_path: KeyToStringToDentMap = HashMap::new();
-    for ds in options.directories.iter() {
+    let start_time = Instant::now();
+    'dirs_loop: for ds in options.directories.iter() {
         let walker = WalkDir::new(&ds.path).into_iter();
         for er in walker.filter_entry(|entry| options.is_entry_included(entry)) {
             if options.interrupt_handle.is_interrupted() {
-                break;
+                break 'dirs_loop;
             }
             let entry = match er {
                 Ok(entry) => entry,
@@ -98,7 +102,7 @@ pub fn find_files(
             if entry.file_type().is_symlink() {
                 continue;
             }
-            let size = entry.metadata().unwrap().len();
+            let size = entry.metadata()?.len();
             if size == 0 || size < options.min_size || size > options.max_size {
                 continue;
             }
@@ -123,30 +127,24 @@ pub fn find_files(
             });
         }
     }
-    let mut by_key: KeyToDentsMap = HashMap::new();
+    let mut by_key: KeyToDentsMap = HashMap::with_capacity(by_key_and_path.len());
+    for (key, ent_map) in &by_key_and_path {
+        if ent_map.len() > 1 {
+            by_key.insert(key.clone(), ent_map.values().cloned().collect());
+        }
+    }
     let find_stats = FindStats {
         interrupted: options.interrupt_handle.check_and_reset_interrupt(),
         n_bytes,
         n_dirs,
         n_files,
         n_precull_groups: by_key_and_path.len() as u64,
+        duration: Some(start_time.elapsed()),
     };
-    for (key, ent_map) in &by_key_and_path {
-        if ent_map.len() > 1 {
-            by_key.insert(key.clone(), ent_map.values().cloned().collect());
-        }
-    }
-    on_progress(ProgressEvent::CalculatingStats { n_files });
-    let hash_stats = calculate_hash_stats(&by_key);
     on_progress(ProgressEvent::FindFinished);
-    (
+    Ok(FindFilesResult {
         find_stats,
-        hash_stats,
         by_key,
-        if return_precull {
-            Some(by_key_and_path)
-        } else {
-            None
-        },
-    )
+        precull_files: return_precull.then_some(by_key_and_path),
+    })
 }
