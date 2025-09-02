@@ -22,7 +22,8 @@ pub struct HashStats {
 
 #[derive(Debug, Serialize)]
 pub struct TaggedPath {
-    pub tag_index: u8,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tag_index: Option<u8>,
     pub path: String,
 }
 
@@ -45,6 +46,7 @@ pub struct KeyGroupResult {
 
 #[derive(Debug, Serialize)]
 pub struct GrandResult<'a> {
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub tag_names: Vec<String>,
     pub find_stats: &'a FindStats,
     pub hash_stats: &'a HashStats,

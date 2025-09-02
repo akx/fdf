@@ -11,7 +11,7 @@ use walkdir::{DirEntry, WalkDir};
 #[derive(Clone, Debug)]
 pub struct AugDirEntry {
     pub dir_entry: DirEntry,
-    pub tag_index: u8,
+    pub tag_index: Option<u8>,
     pub size: u64,
 }
 
