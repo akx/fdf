@@ -1,24 +1,27 @@
 use crate::interrupt::InterruptHandle;
+use bit_set::BitSet;
 use regex::RegexSet;
+use serde::Serialize;
 use walkdir::DirEntry;
 
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug, Serialize)]
 pub enum HashAlgorithm {
     Blake3,
     Sha256,
     Xxh64,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 pub enum NameGroupingOption {
     IgnoreName,
     FullNameWhenNoExtension,
     SingleGroupWhenNoExtension,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct DirectorySpec {
-    pub tag_index: u8,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tag_index: Option<u8>,
     pub path: String,
 }
 
@@ -40,6 +43,28 @@ pub struct Options {
     pub file_hash_threads: usize,
     pub elide_same_tag_groups: bool,
     pub interrupt_handle: InterruptHandle,
+}
+
+impl Options {
+    pub fn validate(&self) -> anyhow::Result<()> {
+        let mut tag_indices: BitSet = BitSet::new();
+        let mut has_none_tag_indices = false;
+        for dir in &self.directories {
+            match dir.tag_index {
+                Some(i) => {
+                    tag_indices.insert(i as usize);
+                }
+                None => has_none_tag_indices = true,
+            };
+        }
+        if has_none_tag_indices && tag_indices.len() > 0 {
+            anyhow::bail!("Cannot mix tagged and untagged directories");
+        }
+        if !tag_indices.is_empty() && self.tag_names.len() != tag_indices.len() {
+            anyhow::bail!("Tag indices in directories do not match tag names");
+        }
+        Ok(())
+    }
 }
 
 impl Options {

@@ -12,7 +12,6 @@ use indicatif::HumanBytes;
 use std::error::Error;
 use std::fs::File;
 use std::io::{stdout, Write};
-use std::process::exit;
 use std::time::{Duration, Instant};
 use termcolor::{Color, ColorChoice, ColorSpec, NoColor, StandardStream, WriteColor};
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
@@ -179,10 +178,7 @@ fn init_tracing(verbosity: u8) {
 }
 
 fn main() -> anyhow::Result<()> {
-    let (options, cli_options) = parse_args().unwrap_or_else(|err| {
-        eprintln!("{err}");
-        exit(1);
-    });
+    let (options, cli_options) = parse_args()?;
 
     init_tracing(options.verbosity as u8);
 

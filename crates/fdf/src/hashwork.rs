@@ -212,7 +212,7 @@ pub fn do_hash(
                         tag_index: dent.tag_index,
                         path: dent.dir_entry.path().to_str().unwrap().to_string(),
                     };
-                    tag_indices_seen.insert(dent.tag_index as usize);
+                    tag_indices_seen.insert(dent.tag_index.unwrap_or(0u8) as usize);
                     hash_to_group.entry(hash).or_default().push(tagged_path);
                     n_files += 1;
                 }

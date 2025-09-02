@@ -117,12 +117,12 @@ pub fn parse_args() -> anyhow::Result<(CoreOptions, CliOptions)> {
     let file_hash_threads = args.file_hash_threads.unwrap_or(n_cpus);
 
     let mut tag_to_index: HashMap<String, u8> = HashMap::new();
-    let mut tag_names: Vec<String> = vec!["".to_string()];
+    let mut tag_names: Vec<String> = Vec::new();
 
     let mut directories: Vec<DirectorySpec> = Vec::new();
     for dir in args.directory.into_iter() {
         directories.push(DirectorySpec {
-            tag_index: 0,
+            tag_index: None,
             path: dir,
         });
     }
@@ -139,7 +139,7 @@ pub fn parse_args() -> anyhow::Result<(CoreOptions, CliOptions)> {
             index
         };
         directories.push(DirectorySpec {
-            tag_index,
+            tag_index: Some(tag_index),
             path: dir.clone(),
         });
     }
@@ -162,6 +162,7 @@ pub fn parse_args() -> anyhow::Result<(CoreOptions, CliOptions)> {
         elide_same_tag_groups: args.elide_same_tag_groups,
         interrupt_handle: fdf::InterruptHandle::new(),
     };
+    core_options.validate()?;
 
     let report_json = read_report_option(&args.report_json);
     let report_human = read_report_option(&args.report_human);
