@@ -11,11 +11,11 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow.workspace = true
-clap = { version = "4.5.46", features = ["derive", "cargo"] }
-ctrlc = "3.4.7"
+clap = { version = "4.5.60", features = ["derive", "cargo"] }
+ctrlc = "3.5.2"
 fdf = { path = "../fdf" }
-indicatif = "0.18.0"
+indicatif = "0.18.4"
 regex.workspace = true
-serde_json = "1.0.143"
+serde_json = "1.0.149"
 termcolor = "1.4.1"
-tracing-subscriber = { version = "0.3.19", features = ["env-filter", "fmt", "ansi"] }
+tracing-subscriber = { version = "0.3.22", features = ["env-filter", "fmt", "ansi"] }

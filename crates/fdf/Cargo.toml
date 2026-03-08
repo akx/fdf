@@ -8,7 +8,7 @@ description = "Fast file duplicate finder core library"
 [dependencies]
 anyhow.workspace = true
 bit-set = "0.8.0"
-blake3 = "1.8.2"
+blake3 = "1.8.3"
 crossbeam = "0.8.4"
 hex = "0.4.3"
 regex.workspace = true
@@ -16,5 +16,5 @@ serde.workspace = true
 sha2 = { version = "0.10.9", features = ["asm"] }
 string_cache = "0.9.0"
 tracing.workspace = true
-twox-hash = "2.1.1"
+twox-hash = "2.1.2"
 walkdir = "2.5.0"
