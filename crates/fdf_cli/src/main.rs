@@ -3,7 +3,7 @@ mod cli_options;
 mod parse_size;
 
 use crate::cli::parse_args;
-use crate::cli_options::{CliOptions, ReportOption};
+use crate::cli_options::{Action, CliOptions, ReportOption};
 use fdf::find::{calculate_hash_stats, FindFilesResult};
 use fdf::{
     find::KeyToStringToDentMap, hashwork, GrandResult, HashStats, InterruptHandle, KeyGroupResult,
@@ -145,6 +145,69 @@ where
     };
 }
 
+#[cfg(target_os = "macos")]
+fn do_clonefile(
+    key_group_results: &[KeyGroupResult],
+    elide_same_tag_groups: bool,
+) -> anyhow::Result<()> {
+    use std::ffi::CString;
+
+    extern "C" {
+        fn clonefile(
+            src: *const libc::c_char,
+            dst: *const libc::c_char,
+            flags: libc::c_int,
+        ) -> libc::c_int;
+    }
+
+    let mut n_cloned: u64 = 0;
+    let mut n_errors: u64 = 0;
+    let mut bytes_reclaimed: u64 = 0;
+
+    for kgr in key_group_results.iter() {
+        if elide_same_tag_groups && !kgr.cross_tag {
+            continue;
+        }
+        for hg in &kgr.hash_groups {
+            if hg.files.len() <= 1 {
+                continue;
+            }
+            let source = &hg.files[0].path;
+            for tp in &hg.files[1..] {
+                let dest = &tp.path;
+                // Remove the duplicate, then clone from source
+                if let Err(e) = std::fs::remove_file(dest) {
+                    eprintln!("Error removing {dest}: {e}");
+                    n_errors += 1;
+                    continue;
+                }
+                let c_src =
+                    CString::new(source.as_str()).expect("source path contains null byte");
+                let c_dst = CString::new(dest.as_str()).expect("dest path contains null byte");
+                let ret = unsafe { clonefile(c_src.as_ptr(), c_dst.as_ptr(), 0) };
+                if ret != 0 {
+                    let err = std::io::Error::last_os_error();
+                    eprintln!("Error cloning {source} -> {dest}: {err}");
+                    // Try to restore the file by copying it back
+                    if let Err(copy_err) = std::fs::copy(source, dest) {
+                        eprintln!("Error restoring {dest} after failed clone: {copy_err}");
+                    }
+                    n_errors += 1;
+                } else {
+                    n_cloned += 1;
+                    bytes_reclaimed += kgr.size;
+                }
+            }
+        }
+    }
+
+    eprintln!(
+        "Clonefile: {n_cloned} files cloned, ~{} reclaimed, {n_errors} errors.",
+        HumanBytes(bytes_reclaimed),
+    );
+    Ok(())
+}
+
 fn configure_interrupt(interrupt_handle: InterruptHandle) {
     ctrlc::set_handler(move || {
         eprintln!("received Ctrl+C!");
@@ -186,8 +249,11 @@ fn main() -> anyhow::Result<()> {
         report_json,
         mut report_human,
         report_file_list,
+        action,
+        no_confirm,
     } = cli_options;
-    if report_json == ReportOption::None && report_human == ReportOption::None {
+    let has_action = action.is_some();
+    if report_json == ReportOption::None && report_human == ReportOption::None && !has_action {
         eprintln!("No output arguments set; assuming human output to stdout desired.");
         report_human = ReportOption::Stdout;
     }
@@ -292,6 +358,25 @@ fn main() -> anyhow::Result<()> {
     });
     print_duplicate_info(&key_group_results, elide_same_tag_groups);
     print_stage_duration("Output", &hash_stats, output_start_time.elapsed());
+    if let Some(action) = action {
+        match action {
+            Action::Clonefile => {
+                if !no_confirm {
+                    eprint!("Replace duplicate files with clonefile clones? [y/N] ");
+                    let mut input = String::new();
+                    std::io::stdin().read_line(&mut input)?;
+                    if !input.trim().eq_ignore_ascii_case("y") {
+                        eprintln!("Aborted.");
+                        return Ok(());
+                    }
+                }
+                #[cfg(target_os = "macos")]
+                do_clonefile(&key_group_results, elide_same_tag_groups)?;
+                #[cfg(not(target_os = "macos"))]
+                anyhow::bail!("--action=clonefile is only supported on macOS (APFS)");
+            }
+        }
+    }
     print_stage_duration("Finished", &hash_stats, start_time.elapsed());
     Ok(())
 }

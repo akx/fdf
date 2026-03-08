@@ -366,6 +366,7 @@ dependencies = [
  "ctrlc",
  "fdf",
  "indicatif",
+ "libc",
  "regex",
  "serde_json",
  "termcolor",

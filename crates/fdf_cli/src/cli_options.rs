@@ -47,8 +47,19 @@ impl From<NameGroupingOption> for CoreNameGroupingOption {
 }
 
 #[derive(Debug)]
+#[derive(Clone, PartialEq, ValueEnum)]
+pub enum Action {
+    /// Replace duplicate files with APFS clonefile copies (macOS only).
+    /// Keeps one file per duplicate set and replaces the others with
+    /// copy-on-write clones, reclaiming disk space.
+    Clonefile,
+}
+
+#[derive(Debug)]
 pub struct CliOptions {
     pub report_json: ReportOption,
     pub report_human: ReportOption,
     pub report_file_list: ReportOption,
+    pub action: Option<Action>,
+    pub no_confirm: bool,
 }

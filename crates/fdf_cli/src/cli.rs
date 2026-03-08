@@ -1,4 +1,4 @@
-use crate::cli_options::{CliOptions, HashAlgorithm, NameGroupingOption, ReportOption};
+use crate::cli_options::{Action, CliOptions, HashAlgorithm, NameGroupingOption, ReportOption};
 use crate::parse_size::parse_size_string;
 use clap::Parser;
 use fdf::options::DirectorySpec;
@@ -100,6 +100,14 @@ pub struct Args {
     /// Elide groups where all files have the same directory tag
     #[arg(long = "elide-same-tag-groups")]
     pub elide_same_tag_groups: bool,
+
+    /// Action to perform on duplicate sets
+    #[arg(long = "action")]
+    pub action: Option<Action>,
+
+    /// Skip confirmation prompt before performing actions
+    #[arg(long = "no-confirm")]
+    pub no_confirm: bool,
 }
 
 pub fn parse_args() -> anyhow::Result<(CoreOptions, CliOptions)> {
@@ -172,6 +180,8 @@ pub fn parse_args() -> anyhow::Result<(CoreOptions, CliOptions)> {
         report_json,
         report_human,
         report_file_list,
+        action: args.action,
+        no_confirm: args.no_confirm,
     };
     Ok((core_options, cli_options))
 }
