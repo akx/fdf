@@ -9,7 +9,7 @@ authors = ["Aarni Koskela <akx@iki.fi>"]
 edition = "2021"
 
 [workspace.dependencies]
-anyhow = "1.0.102"
-regex = "1.12.3"
-serde = { version = "1.0.228", features = ["derive"] }
+anyhow = "1.0.104"
+regex = "1.13.1"
+serde = { version = "1.0.229", features = ["derive"] }
 tracing = "0.1.44"

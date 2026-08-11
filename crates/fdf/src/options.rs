@@ -57,10 +57,10 @@ impl Options {
                 None => has_none_tag_indices = true,
             };
         }
-        if has_none_tag_indices && tag_indices.len() > 0 {
+        if has_none_tag_indices && tag_indices.count() > 0 {
             anyhow::bail!("Cannot mix tagged and untagged directories");
         }
-        if !tag_indices.is_empty() && self.tag_names.len() != tag_indices.len() {
+        if !tag_indices.is_empty() && self.tag_names.len() != tag_indices.count() {
             anyhow::bail!("Tag indices in directories do not match tag names");
         }
         Ok(())

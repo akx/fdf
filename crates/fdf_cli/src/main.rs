@@ -114,7 +114,7 @@ fn print_duplicate_info(key_group_results: &[KeyGroupResult], elide_same_tag_gro
 }
 
 fn print_file_list(writer: &mut dyn Write, ksdmap: &KeyToStringToDentMap) {
-    for (_key, path_to_dent_map) in ksdmap.iter() {
+    for path_to_dent_map in ksdmap.values() {
         for key in path_to_dent_map.keys() {
             writeln!(writer, "{key}").unwrap();
         }
@@ -181,8 +181,7 @@ fn do_clonefile(
                     n_errors += 1;
                     continue;
                 }
-                let c_src =
-                    CString::new(source.as_str()).expect("source path contains null byte");
+                let c_src = CString::new(source.as_str()).expect("source path contains null byte");
                 let c_dst = CString::new(dest.as_str()).expect("dest path contains null byte");
                 let ret = unsafe { clonefile(c_src.as_ptr(), c_dst.as_ptr(), 0) };
                 if ret != 0 {

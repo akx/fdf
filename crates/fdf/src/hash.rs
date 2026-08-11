@@ -1,6 +1,7 @@
 use crate::find::{AugDirEntry, GroupKey};
 use crate::options::Options;
 use crate::HashAlgorithm;
+use digest_io::IoWrapper;
 use sha2::{Digest, Sha256};
 use std::error::Error;
 use std::fs::File;
@@ -57,9 +58,9 @@ impl HasherInstance {
                 Ok(HashResult::Blake3(*hasher.finalize().as_bytes()))
             }
             HasherInstance::Sha256 => {
-                let mut hasher = Sha256::new();
+                let mut hasher = IoWrapper(Sha256::new());
                 copy(reader, &mut hasher)?;
-                Ok(HashResult::Sha256(hasher.finalize().into()))
+                Ok(HashResult::Sha256(hasher.0.finalize().into()))
             }
             HasherInstance::Xxh64 { seed, file_size } => {
                 let hasher = XxHash64::with_seed(*seed);

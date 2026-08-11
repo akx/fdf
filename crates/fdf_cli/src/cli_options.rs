@@ -46,8 +46,7 @@ impl From<NameGroupingOption> for CoreNameGroupingOption {
     }
 }
 
-#[derive(Debug)]
-#[derive(Clone, PartialEq, ValueEnum)]
+#[derive(Debug, Clone, PartialEq, ValueEnum)]
 pub enum Action {
     /// Replace duplicate files with APFS clonefile copies (macOS only).
     /// Keeps one file per duplicate set and replaces the others with

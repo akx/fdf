@@ -222,7 +222,7 @@ pub fn do_hash(
             }
         }
 
-        let cross_tag = tag_indices_seen.len() > 1;
+        let cross_tag = tag_indices_seen.count() > 1;
         let mut hash_groups = Vec::with_capacity(hash_to_group.len());
 
         for (hash, mut files) in hash_to_group {
